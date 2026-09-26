@@ -1,0 +1,330 @@
+format_version: "1.0"
+
+pilot:
+  name: "AE 10-Skill Verification Pilot"
+  purpose: "Validate that a UI-driving agent can execute known After Effects skills and that the result can be verified from application state."
+  application: "Adobe After Effects"
+  target_version: "2026 / 26.x"
+  execution_mode: "UI_ONLY"
+  project_policy: "DISPOSABLE_TEST_PROJECT_ONLY"
+  verification_priority:
+    - "AE_READER"
+    - "WINDOWS_UI_AUTOMATION"
+    - "VISION"
+  required_repetitions_per_skill: 3
+  allowed_final_status:
+    - "VERIFIED"
+    - "UI_CHANGED"
+    - "EXECUTION_FAILED"
+    - "NEEDS_REVIEW"
+
+rules:
+  - "Never use fixed screen coordinates as the only way to locate a control."
+  - "Prefer semantic UI elements, labels, application state, and relative targeting."
+  - "After every skill, capture evidence before moving to the next skill."
+  - "A visual match alone is not enough when AE Reader can verify the property directly."
+  - "Do not overwrite the source skill when a UI change is detected. Record a proposed correction first."
+  - "Reset to a known clean state when a failed skill may contaminate later tests."
+  - "A skill is VERIFIED only after three independent successful runs."
+
+baseline:
+  clean_project_required: true
+  composition:
+    name: "PILOT_COMP"
+    width: 1920
+    height: 1080
+    duration_seconds: 5
+    frame_rate: 30
+
+skills:
+
+  - id: "AE-PILOT-001"
+    title: "Create a standard test composition"
+    category: "composition"
+    depends_on: []
+    goal: "Create a new composition named PILOT_COMP with the pilot baseline settings."
+    ui_intent:
+      - "Open the new composition dialog through the After Effects user interface."
+      - "Enter the requested composition name and settings."
+      - "Confirm creation."
+    expected_state:
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "active composition exists"
+        - "composition name equals PILOT_COMP"
+        - "width equals 1920"
+        - "height equals 1080"
+        - "duration equals 5 seconds"
+        - "frame rate equals 30"
+    diagnose_on_failure:
+      - "new composition dialog changed"
+      - "field label changed"
+      - "wrong preset or units"
+      - "confirmation did not complete"
+
+  - id: "AE-PILOT-002"
+    title: "Create a text layer"
+    category: "text"
+    depends_on:
+      - "AE-PILOT-001"
+    goal: "Create a text layer containing PILOT TEST."
+    ui_intent:
+      - "Use the After Effects text tool or text-layer creation command from the UI."
+      - "Enter the exact text PILOT TEST."
+    expected_state:
+      layer:
+        type: "text"
+        source_text: "PILOT TEST"
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "a text layer exists in PILOT_COMP"
+        - "source text equals PILOT TEST"
+    diagnose_on_failure:
+      - "text tool was not activated"
+      - "text editing focus was lost"
+      - "typed text went to the wrong control"
+
+  - id: "AE-PILOT-003"
+    title: "Rename the text layer"
+    category: "layer_management"
+    depends_on:
+      - "AE-PILOT-002"
+    goal: "Rename the created text layer to PILOT_TEXT."
+    ui_intent:
+      - "Select the text layer in the timeline."
+      - "Invoke layer rename using the normal UI or keyboard interaction."
+      - "Enter PILOT_TEXT and confirm."
+    expected_state:
+      layer:
+        name: "PILOT_TEXT"
+        type: "text"
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "a layer named PILOT_TEXT exists"
+        - "that layer remains a text layer"
+    diagnose_on_failure:
+      - "timeline selection changed"
+      - "rename command changed"
+      - "text edit mode captured the keystrokes"
+
+  - id: "AE-PILOT-004"
+    title: "Set layer position"
+    category: "transform"
+    depends_on:
+      - "AE-PILOT-003"
+    goal: "Set PILOT_TEXT position to the center of the 1920x1080 composition."
+    ui_intent:
+      - "Select PILOT_TEXT."
+      - "Open or reveal the Position property."
+      - "Set Position to X=960 and Y=540."
+    expected_state:
+      layer: "PILOT_TEXT"
+      transform:
+        position:
+          x: 960
+          y: 540
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "PILOT_TEXT Position X equals 960"
+        - "PILOT_TEXT Position Y equals 540"
+    diagnose_on_failure:
+      - "wrong layer selected"
+      - "position field layout changed"
+      - "value entry was interpreted in another unit or field"
+
+  - id: "AE-PILOT-005"
+    title: "Set uniform scale"
+    category: "transform"
+    depends_on:
+      - "AE-PILOT-004"
+    goal: "Set PILOT_TEXT uniform scale to 125 percent."
+    ui_intent:
+      - "Reveal the Scale property for PILOT_TEXT."
+      - "Set uniform Scale to 125 percent."
+    expected_state:
+      layer: "PILOT_TEXT"
+      transform:
+        scale:
+          x_percent: 125
+          y_percent: 125
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "Scale X equals 125"
+        - "Scale Y equals 125"
+    diagnose_on_failure:
+      - "dimensions were unlinked"
+      - "wrong scale component was edited"
+      - "property field changed or was not focused"
+
+  - id: "AE-PILOT-006"
+    title: "Set opacity"
+    category: "transform"
+    depends_on:
+      - "AE-PILOT-005"
+    goal: "Set PILOT_TEXT opacity to 40 percent."
+    ui_intent:
+      - "Reveal the Opacity property for PILOT_TEXT."
+      - "Set Opacity to 40 percent."
+    expected_state:
+      layer: "PILOT_TEXT"
+      transform:
+        opacity_percent: 40
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "Opacity equals 40"
+    diagnose_on_failure:
+      - "wrong property edited"
+      - "opacity field was not active"
+      - "property shortcut or label changed"
+
+  - id: "AE-PILOT-007"
+    title: "Create opacity animation"
+    category: "keyframes"
+    depends_on:
+      - "AE-PILOT-006"
+    goal: "Animate PILOT_TEXT opacity from 0 percent at 0 seconds to 100 percent at 1 second."
+    ui_intent:
+      - "Move the current-time indicator to 0 seconds."
+      - "Enable animation for Opacity and set the first value to 0."
+      - "Move to 1 second."
+      - "Set Opacity to 100, creating the second keyframe."
+    expected_state:
+      layer: "PILOT_TEXT"
+      property: "Opacity"
+      keyframes:
+        - time_seconds: 0
+          value: 0
+        - time_seconds: 1
+          value: 100
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "Opacity has exactly the expected keyframes at 0 and 1 second"
+        - "first keyframe value equals 0"
+        - "second keyframe value equals 100"
+    diagnose_on_failure:
+      - "stopwatch was not enabled"
+      - "current-time indicator was at the wrong time"
+      - "second edit replaced a value instead of creating a keyframe"
+      - "timeline time display caused incorrect placement"
+
+  - id: "AE-PILOT-008"
+    title: "Duplicate the text layer"
+    category: "layer_management"
+    depends_on:
+      - "AE-PILOT-007"
+    goal: "Duplicate PILOT_TEXT and rename the duplicate PILOT_TEXT_COPY."
+    ui_intent:
+      - "Select PILOT_TEXT."
+      - "Duplicate the selected layer using the UI or standard keyboard command."
+      - "Rename the duplicate PILOT_TEXT_COPY."
+    expected_state:
+      layers:
+        required_names:
+          - "PILOT_TEXT"
+          - "PILOT_TEXT_COPY"
+        required_count_minimum: 2
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "PILOT_TEXT exists"
+        - "PILOT_TEXT_COPY exists"
+        - "both are text layers"
+    diagnose_on_failure:
+      - "wrong layer duplicated"
+      - "duplicate command changed"
+      - "rename affected the original layer"
+
+  - id: "AE-PILOT-009"
+    title: "Reorder a layer by dragging"
+    category: "timeline_drag"
+    depends_on:
+      - "AE-PILOT-008"
+    goal: "Move PILOT_TEXT_COPY below PILOT_TEXT in the timeline using a drag interaction."
+    ui_intent:
+      - "Locate PILOT_TEXT_COPY in the timeline."
+      - "Drag the layer row so it becomes directly below PILOT_TEXT."
+      - "Do not change layer timing."
+    expected_state:
+      layer_order:
+        directly_below:
+          layer: "PILOT_TEXT_COPY"
+          reference_layer: "PILOT_TEXT"
+    verification:
+      primary: "AE_READER"
+      checks:
+        - "PILOT_TEXT_COPY is directly below PILOT_TEXT"
+        - "both layers keep their original in/out timing"
+    diagnose_on_failure:
+      - "drag target shifted because of timeline layout"
+      - "layer was moved in time instead of reordered"
+      - "timeline scrolling changed the target row"
+      - "UI scale or workspace layout changed"
+
+  - id: "AE-PILOT-010"
+    title: "Apply Gaussian Blur and set its value"
+    category: "effect"
+    depends_on:
+      - "AE-PILOT-009"
+    goal: "Apply Gaussian Blur to PILOT_TEXT and set Blurriness to 25."
+    ui_intent:
+      - "Select PILOT_TEXT."
+      - "Find and apply the Gaussian Blur effect through the After Effects UI."
+      - "Set the effect's Blurriness value to 25."
+    expected_state:
+      layer: "PILOT_TEXT"
+      effect:
+        name: "Gaussian Blur"
+        property:
+          name: "Blurriness"
+          value: 25
+    verification:
+      primary: "AE_READER"
+      fallback:
+        - "WINDOWS_UI_AUTOMATION"
+        - "VISION"
+      checks:
+        - "Gaussian Blur is present on PILOT_TEXT"
+        - "Blurriness equals 25"
+    diagnose_on_failure:
+      - "effect display name changed"
+      - "effect search or menu path changed"
+      - "wrong layer selected before applying the effect"
+      - "effect parameter label changed"
+      - "AE Reader does not yet expose the effect property"
+
+report_schema:
+  per_run:
+    - "skill_id"
+    - "run_number"
+    - "status"
+    - "started_at"
+    - "finished_at"
+    - "ae_version"
+    - "workspace"
+    - "pre_state"
+    - "actions_attempted"
+    - "post_state"
+    - "verification_evidence"
+    - "failure_step"
+    - "failure_reason"
+    - "suspected_ui_change"
+    - "proposed_fix"
+    - "screenshot_refs"
+  final_skill_decision:
+    verified_when: "3 independent PASS runs with no conflicting evidence"
+    ui_changed_when: "the intended capability still exists but the stored UI path/label/layout is stale"
+    execution_failed_when: "the requested state was not achieved"
+    needs_review_when: "evidence is ambiguous or the verifier cannot observe the required property"
