@@ -1,34 +1,76 @@
-format_version: "1.0"
+format_version: "1.1"
 
 pilot:
   name: "AE 10-Skill Verification Pilot"
-  purpose: "Validate that a UI-driving agent can execute known After Effects skills and that the result can be verified from application state."
+  purpose: "Validate ten After Effects UI skills independently, with deterministic preconditions and fail-closed verification."
   application: "Adobe After Effects"
   target_version: "2026 / 26.x"
   execution_mode: "UI_ONLY"
   project_policy: "DISPOSABLE_TEST_PROJECT_ONLY"
+  isolation_model: "ONE_SKILL_ONE_FRESH_FIXTURE"
+  required_repetitions_per_skill: 3
+  source_of_truth_for_success: "AE_READER"
   verification_priority:
     - "AE_READER"
     - "WINDOWS_UI_AUTOMATION"
     - "VISION"
-  required_repetitions_per_skill: 3
   allowed_final_status:
     - "VERIFIED"
     - "UI_CHANGED"
     - "EXECUTION_FAILED"
-    - "NEEDS_REVIEW"
+    - "VERIFICATION_FAILED"
+    - "BLOCKED"
+    - "INCONCLUSIVE"
 
-rules:
+independence_policy:
+  skills_must_not_depend_on_previous_skill_runs: true
+  fixture_preparation_is_outside_measured_skill: true
+  restore_fresh_fixture_before_every_run: true
+  never_use_undo_as_primary_reset: true
+  stop_batch_after_environment_contamination: true
+  note: "The fixtures below are state specifications. Actual .aep fixture files will be materialized later and must match these states before measured execution begins."
+
+fail_closed_policy:
+  - "Never mark VERIFIED from the agent's own FINISH status."
+  - "Never mark VERIFIED from screenshots alone when AE Reader can inspect the target property."
+  - "If required AE Reader evidence is missing, malformed, stale, or ambiguous, return INCONCLUSIVE."
+  - "If the UI action completed but the expected AE state does not match, return VERIFICATION_FAILED."
+  - "If the intended capability still exists but a stored label/path/control location changed, return UI_CHANGED only when evidence supports that conclusion."
+  - "If an unexpected dialog, permission issue, crash, wrong application, or broken fixture prevents execution, return BLOCKED."
+  - "A single successful run is never enough for VERIFIED."
+
+execution_rules:
   - "Never use fixed screen coordinates as the only way to locate a control."
-  - "Prefer semantic UI elements, labels, application state, and relative targeting."
-  - "After every skill, capture evidence before moving to the next skill."
-  - "A visual match alone is not enough when AE Reader can verify the property directly."
-  - "Do not overwrite the source skill when a UI change is detected. Record a proposed correction first."
-  - "Reset to a known clean state when a failed skill may contaminate later tests."
-  - "A skill is VERIFIED only after three independent successful runs."
+  - "Prefer semantic UI controls, labels, application state, and relative targeting."
+  - "Use keyboard shortcuts only when they are standard UI interactions, not scripts or hidden automation."
+  - "Do not use ExtendScript, expressions, scripting APIs, direct project-file mutation, or application automation APIs to perform the skill under test."
+  - "AE Reader is read-only and may be used before and after the measured action."
+  - "Capture evidence at the failure boundary before recovery or reset."
+  - "Do not modify the source skill specification automatically after a failure."
+  - "A proposed correction must be stored separately and re-tested from a fresh fixture."
+  - "Abort the current run if After Effects loses focus to an unknown application or an unknown modal dialog appears."
+
+environment_contract:
+  operating_system: "Windows"
+  display:
+    target_resolution: "1920x1080"
+    scaling: "record_actual_value"
+  after_effects:
+    version: "record_exact_build"
+    language: "record_actual_language"
+    workspace: "record_actual_workspace"
+  run_identity:
+    require_unique_run_id: true
+    require_start_timestamp: true
+    require_fixture_id: true
+  preflight:
+    - "After Effects process is running."
+    - "No unknown modal dialog is open."
+    - "The expected fixture state is loaded."
+    - "AE Reader returns a fresh response for the current run."
+    - "The actual application/build/workspace/display metadata is recorded."
 
 baseline:
-  clean_project_required: true
   composition:
     name: "PILOT_COMP"
     width: 1920
@@ -36,16 +78,130 @@ baseline:
     duration_seconds: 5
     frame_rate: 30
 
+fixture_specs:
+
+  - id: "FX-001-EMPTY-PROJECT"
+    purpose: "Independent baseline for creating a composition."
+    required_state:
+      project_open: true
+      composition_count: 0
+
+  - id: "FX-002-COMP-EMPTY"
+    purpose: "Independent baseline for creating a text layer."
+    required_state:
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+      layer_count: 0
+
+  - id: "FX-003-TEXT-TO-RENAME"
+    purpose: "Independent baseline for renaming an existing text layer."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "TEXT_TO_RENAME"
+          type: "text"
+          source_text: "PILOT TEST"
+
+  - id: "FX-004-POSITION-READY"
+    purpose: "Independent baseline for position editing."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+          position:
+            x: 320
+            y: 240
+
+  - id: "FX-005-SCALE-READY"
+    purpose: "Independent baseline for scale editing."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          scale:
+            x_percent: 100
+            y_percent: 100
+
+  - id: "FX-006-OPACITY-READY"
+    purpose: "Independent baseline for opacity editing."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          opacity_percent: 100
+          opacity_keyframe_count: 0
+
+  - id: "FX-007-OPACITY-ANIMATION-READY"
+    purpose: "Independent baseline for creating opacity keyframes."
+    required_state:
+      active_comp: "PILOT_COMP"
+      current_time_seconds: 0
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          opacity_percent: 100
+          opacity_keyframe_count: 0
+
+  - id: "FX-008-DUPLICATE-READY"
+    purpose: "Independent baseline for duplicating a layer."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+      forbidden_state:
+        layer_name: "PILOT_TEXT_COPY"
+
+  - id: "FX-009-REORDER-READY"
+    purpose: "Independent baseline for timeline drag and reorder."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layer_order_top_to_bottom:
+        - "PILOT_TEXT_COPY"
+        - "PILOT_TEXT"
+      timing:
+        PILOT_TEXT:
+          in_seconds: 0
+          out_seconds: 5
+        PILOT_TEXT_COPY:
+          in_seconds: 0
+          out_seconds: 5
+
+  - id: "FX-010-EFFECT-READY"
+    purpose: "Independent baseline for applying an effect."
+    required_state:
+      active_comp: "PILOT_COMP"
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+      forbidden_state:
+        effect_name_contains: "Gaussian Blur"
+
 skills:
 
   - id: "AE-PILOT-001"
     title: "Create a standard test composition"
     category: "composition"
-    depends_on: []
+    independent: true
+    fixture_id: "FX-001-EMPTY-PROJECT"
     goal: "Create a new composition named PILOT_COMP with the pilot baseline settings."
-    ui_intent:
-      - "Open the new composition dialog through the After Effects user interface."
-      - "Enter the requested composition name and settings."
+    precondition_assertions:
+      - "No composition exists before measured execution."
+    measured_ui_steps:
+      - "Open the New Composition dialog through the After Effects UI."
+      - "Enter name PILOT_COMP."
+      - "Set width to 1920 and height to 1080."
+      - "Set duration to 5 seconds."
+      - "Set frame rate to 30."
       - "Confirm creation."
     expected_state:
       active_comp:
@@ -56,7 +212,7 @@ skills:
         frame_rate: 30
     verification:
       primary: "AE_READER"
-      checks:
+      required_checks:
         - "active composition exists"
         - "composition name equals PILOT_COMP"
         - "width equals 1920"
@@ -66,66 +222,83 @@ skills:
     diagnose_on_failure:
       - "new composition dialog changed"
       - "field label changed"
-      - "wrong preset or units"
+      - "wrong field or units were edited"
       - "confirmation did not complete"
 
   - id: "AE-PILOT-002"
     title: "Create a text layer"
     category: "text"
-    depends_on:
-      - "AE-PILOT-001"
-    goal: "Create a text layer containing PILOT TEST."
-    ui_intent:
-      - "Use the After Effects text tool or text-layer creation command from the UI."
-      - "Enter the exact text PILOT TEST."
+    independent: true
+    fixture_id: "FX-002-COMP-EMPTY"
+    goal: "Create exactly one text layer containing PILOT TEST."
+    precondition_assertions:
+      - "PILOT_COMP exists and has zero layers."
+    measured_ui_steps:
+      - "Activate the text tool or the normal UI command for creating text."
+      - "Create text in PILOT_COMP."
+      - "Enter exactly PILOT TEST."
+      - "Exit text editing so the value is committed."
     expected_state:
+      layer_count: 1
       layer:
         type: "text"
         source_text: "PILOT TEST"
     verification:
       primary: "AE_READER"
-      checks:
-        - "a text layer exists in PILOT_COMP"
+      required_checks:
+        - "PILOT_COMP has exactly one layer"
+        - "the layer is a text layer"
         - "source text equals PILOT TEST"
     diagnose_on_failure:
       - "text tool was not activated"
       - "text editing focus was lost"
       - "typed text went to the wrong control"
+      - "text edit was not committed"
 
   - id: "AE-PILOT-003"
-    title: "Rename the text layer"
+    title: "Rename a text layer"
     category: "layer_management"
-    depends_on:
-      - "AE-PILOT-002"
-    goal: "Rename the created text layer to PILOT_TEXT."
-    ui_intent:
-      - "Select the text layer in the timeline."
-      - "Invoke layer rename using the normal UI or keyboard interaction."
+    independent: true
+    fixture_id: "FX-003-TEXT-TO-RENAME"
+    goal: "Rename TEXT_TO_RENAME to PILOT_TEXT without changing its source text."
+    precondition_assertions:
+      - "TEXT_TO_RENAME exists as a text layer with source text PILOT TEST."
+      - "PILOT_TEXT does not already exist."
+    measured_ui_steps:
+      - "Select TEXT_TO_RENAME in the timeline."
+      - "Invoke the normal layer rename interaction."
       - "Enter PILOT_TEXT and confirm."
     expected_state:
       layer:
         name: "PILOT_TEXT"
         type: "text"
+        source_text: "PILOT TEST"
+      forbidden_layer_name: "TEXT_TO_RENAME"
     verification:
       primary: "AE_READER"
-      checks:
-        - "a layer named PILOT_TEXT exists"
-        - "that layer remains a text layer"
+      required_checks:
+        - "PILOT_TEXT exists"
+        - "PILOT_TEXT remains a text layer"
+        - "source text still equals PILOT TEST"
+        - "TEXT_TO_RENAME no longer exists"
     diagnose_on_failure:
       - "timeline selection changed"
-      - "rename command changed"
+      - "rename command or label changed"
       - "text edit mode captured the keystrokes"
+      - "a different layer was renamed"
 
   - id: "AE-PILOT-004"
     title: "Set layer position"
     category: "transform"
-    depends_on:
-      - "AE-PILOT-003"
-    goal: "Set PILOT_TEXT position to the center of the 1920x1080 composition."
-    ui_intent:
+    independent: true
+    fixture_id: "FX-004-POSITION-READY"
+    goal: "Set PILOT_TEXT position to X=960 and Y=540."
+    precondition_assertions:
+      - "PILOT_TEXT exists at X=320 and Y=240 before execution."
+    measured_ui_steps:
       - "Select PILOT_TEXT."
-      - "Open or reveal the Position property."
-      - "Set Position to X=960 and Y=540."
+      - "Reveal the Position property through normal UI/shortcut interaction."
+      - "Set Position X to 960 and Y to 540."
     expected_state:
       layer: "PILOT_TEXT"
       transform:
@@ -134,23 +307,27 @@ skills:
           y: 540
     verification:
       primary: "AE_READER"
-      checks:
-        - "PILOT_TEXT Position X equals 960"
-        - "PILOT_TEXT Position Y equals 540"
+      required_checks:
+        - "Position X equals 960"
+        - "Position Y equals 540"
     diagnose_on_failure:
       - "wrong layer selected"
       - "position field layout changed"
-      - "value entry was interpreted in another unit or field"
+      - "the wrong numeric field was edited"
+      - "a value was not committed"
 
   - id: "AE-PILOT-005"
     title: "Set uniform scale"
     category: "transform"
-    depends_on:
-      - "AE-PILOT-004"
-    goal: "Set PILOT_TEXT uniform scale to 125 percent."
-    ui_intent:
-      - "Reveal the Scale property for PILOT_TEXT."
-      - "Set uniform Scale to 125 percent."
+    independent: true
+    fixture_id: "FX-005-SCALE-READY"
+    goal: "Set PILOT_TEXT uniform scale from 100 percent to 125 percent."
+    precondition_assertions:
+      - "PILOT_TEXT Scale X and Y both equal 100 before execution."
+    measured_ui_steps:
+      - "Select PILOT_TEXT."
+      - "Reveal the Scale property."
+      - "Set uniform scale to 125 percent."
     expected_state:
       layer: "PILOT_TEXT"
       transform:
@@ -159,50 +336,62 @@ skills:
           y_percent: 125
     verification:
       primary: "AE_READER"
-      checks:
+      required_checks:
         - "Scale X equals 125"
         - "Scale Y equals 125"
     diagnose_on_failure:
       - "dimensions were unlinked"
-      - "wrong scale component was edited"
+      - "only one scale component was edited"
       - "property field changed or was not focused"
+      - "the value was not committed"
 
   - id: "AE-PILOT-006"
     title: "Set opacity"
     category: "transform"
-    depends_on:
-      - "AE-PILOT-005"
-    goal: "Set PILOT_TEXT opacity to 40 percent."
-    ui_intent:
-      - "Reveal the Opacity property for PILOT_TEXT."
+    independent: true
+    fixture_id: "FX-006-OPACITY-READY"
+    goal: "Set PILOT_TEXT opacity from 100 percent to 40 percent without creating keyframes."
+    precondition_assertions:
+      - "PILOT_TEXT opacity equals 100."
+      - "Opacity has zero keyframes."
+    measured_ui_steps:
+      - "Select PILOT_TEXT."
+      - "Reveal the Opacity property."
       - "Set Opacity to 40 percent."
     expected_state:
       layer: "PILOT_TEXT"
       transform:
         opacity_percent: 40
+      opacity_keyframe_count: 0
     verification:
       primary: "AE_READER"
-      checks:
+      required_checks:
         - "Opacity equals 40"
+        - "Opacity keyframe count remains 0"
     diagnose_on_failure:
       - "wrong property edited"
       - "opacity field was not active"
-      - "property shortcut or label changed"
+      - "animation stopwatch was accidentally enabled"
+      - "the value was not committed"
 
   - id: "AE-PILOT-007"
     title: "Create opacity animation"
     category: "keyframes"
-    depends_on:
-      - "AE-PILOT-006"
-    goal: "Animate PILOT_TEXT opacity from 0 percent at 0 seconds to 100 percent at 1 second."
-    ui_intent:
-      - "Move the current-time indicator to 0 seconds."
-      - "Enable animation for Opacity and set the first value to 0."
-      - "Move to 1 second."
+    independent: true
+    fixture_id: "FX-007-OPACITY-ANIMATION-READY"
+    goal: "Create exactly two Opacity keyframes: 0 percent at 0 seconds and 100 percent at 1 second."
+    precondition_assertions:
+      - "PILOT_TEXT opacity has zero keyframes."
+      - "Current time is 0 seconds."
+    measured_ui_steps:
+      - "Reveal Opacity for PILOT_TEXT."
+      - "At 0 seconds, enable animation and set Opacity to 0."
+      - "Move current time to exactly 1 second."
       - "Set Opacity to 100, creating the second keyframe."
     expected_state:
       layer: "PILOT_TEXT"
       property: "Opacity"
+      keyframe_count: 2
       keyframes:
         - time_seconds: 0
           value: 0
@@ -210,121 +399,229 @@ skills:
           value: 100
     verification:
       primary: "AE_READER"
-      checks:
-        - "Opacity has exactly the expected keyframes at 0 and 1 second"
-        - "first keyframe value equals 0"
-        - "second keyframe value equals 100"
+      required_checks:
+        - "Opacity keyframe count equals 2"
+        - "a keyframe exists at 0 seconds with value 0"
+        - "a keyframe exists at 1 second with value 100"
+        - "no extra Opacity keyframes exist"
     diagnose_on_failure:
       - "stopwatch was not enabled"
       - "current-time indicator was at the wrong time"
-      - "second edit replaced a value instead of creating a keyframe"
-      - "timeline time display caused incorrect placement"
+      - "the second edit replaced a value instead of creating a keyframe"
+      - "timeline time display or frame rounding caused incorrect placement"
 
   - id: "AE-PILOT-008"
-    title: "Duplicate the text layer"
+    title: "Duplicate a text layer"
     category: "layer_management"
-    depends_on:
-      - "AE-PILOT-007"
-    goal: "Duplicate PILOT_TEXT and rename the duplicate PILOT_TEXT_COPY."
-    ui_intent:
+    independent: true
+    fixture_id: "FX-008-DUPLICATE-READY"
+    goal: "Duplicate PILOT_TEXT once and rename only the duplicate to PILOT_TEXT_COPY."
+    precondition_assertions:
+      - "Exactly one PILOT_TEXT layer exists."
+      - "PILOT_TEXT_COPY does not exist."
+    measured_ui_steps:
       - "Select PILOT_TEXT."
-      - "Duplicate the selected layer using the UI or standard keyboard command."
-      - "Rename the duplicate PILOT_TEXT_COPY."
+      - "Duplicate the selected layer using a normal UI or keyboard interaction."
+      - "Rename the new duplicate to PILOT_TEXT_COPY."
     expected_state:
-      layers:
-        required_names:
-          - "PILOT_TEXT"
-          - "PILOT_TEXT_COPY"
-        required_count_minimum: 2
+      required_layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+        - name: "PILOT_TEXT_COPY"
+          type: "text"
+      matching_layer_count: 2
     verification:
       primary: "AE_READER"
-      checks:
-        - "PILOT_TEXT exists"
-        - "PILOT_TEXT_COPY exists"
+      required_checks:
+        - "PILOT_TEXT exists exactly once"
+        - "PILOT_TEXT_COPY exists exactly once"
         - "both are text layers"
+        - "total matching layers equals 2"
     diagnose_on_failure:
       - "wrong layer duplicated"
       - "duplicate command changed"
       - "rename affected the original layer"
+      - "duplicate was created more than once"
 
   - id: "AE-PILOT-009"
     title: "Reorder a layer by dragging"
     category: "timeline_drag"
-    depends_on:
-      - "AE-PILOT-008"
-    goal: "Move PILOT_TEXT_COPY below PILOT_TEXT in the timeline using a drag interaction."
-    ui_intent:
+    independent: true
+    fixture_id: "FX-009-REORDER-READY"
+    goal: "Move PILOT_TEXT_COPY from directly above PILOT_TEXT to directly below it using a drag interaction, without shifting either layer in time."
+    precondition_assertions:
+      - "Top-to-bottom order is PILOT_TEXT_COPY, then PILOT_TEXT."
+      - "Both layers have in=0 seconds and out=5 seconds."
+    measured_ui_steps:
       - "Locate PILOT_TEXT_COPY in the timeline."
-      - "Drag the layer row so it becomes directly below PILOT_TEXT."
-      - "Do not change layer timing."
+      - "Drag the layer row below PILOT_TEXT."
+      - "Release only when the insertion indicator shows a reorder, not a time shift."
     expected_state:
-      layer_order:
-        directly_below:
-          layer: "PILOT_TEXT_COPY"
-          reference_layer: "PILOT_TEXT"
+      layer_order_top_to_bottom:
+        - "PILOT_TEXT"
+        - "PILOT_TEXT_COPY"
+      timing:
+        PILOT_TEXT:
+          in_seconds: 0
+          out_seconds: 5
+        PILOT_TEXT_COPY:
+          in_seconds: 0
+          out_seconds: 5
     verification:
       primary: "AE_READER"
-      checks:
-        - "PILOT_TEXT_COPY is directly below PILOT_TEXT"
-        - "both layers keep their original in/out timing"
+      required_checks:
+        - "PILOT_TEXT is directly above PILOT_TEXT_COPY"
+        - "PILOT_TEXT timing remains 0 to 5 seconds"
+        - "PILOT_TEXT_COPY timing remains 0 to 5 seconds"
     diagnose_on_failure:
       - "drag target shifted because of timeline layout"
       - "layer was moved in time instead of reordered"
       - "timeline scrolling changed the target row"
-      - "UI scale or workspace layout changed"
+      - "workspace layout or UI scaling changed"
 
   - id: "AE-PILOT-010"
     title: "Apply Gaussian Blur and set its value"
     category: "effect"
-    depends_on:
-      - "AE-PILOT-009"
-    goal: "Apply Gaussian Blur to PILOT_TEXT and set Blurriness to 25."
-    ui_intent:
+    independent: true
+    fixture_id: "FX-010-EFFECT-READY"
+    goal: "Apply the Gaussian Blur effect to PILOT_TEXT through the UI and set its Blurriness value to 25."
+    precondition_assertions:
+      - "PILOT_TEXT exists."
+      - "No effect whose display name contains Gaussian Blur is already applied to PILOT_TEXT."
+    measured_ui_steps:
       - "Select PILOT_TEXT."
-      - "Find and apply the Gaussian Blur effect through the After Effects UI."
-      - "Set the effect's Blurriness value to 25."
+      - "Locate and apply Gaussian Blur through the After Effects UI."
+      - "Set the Blurriness value to 25."
     expected_state:
       layer: "PILOT_TEXT"
       effect:
-        name: "Gaussian Blur"
+        display_name_contains: "Gaussian Blur"
         property:
-          name: "Blurriness"
+          display_name: "Blurriness"
           value: 25
     verification:
       primary: "AE_READER"
       fallback:
         - "WINDOWS_UI_AUTOMATION"
         - "VISION"
-      checks:
-        - "Gaussian Blur is present on PILOT_TEXT"
-        - "Blurriness equals 25"
+      required_checks:
+        - "an applied effect identifiable as Gaussian Blur is present on PILOT_TEXT"
+        - "its Blurriness value equals 25"
     diagnose_on_failure:
       - "effect display name changed"
       - "effect search or menu path changed"
       - "wrong layer selected before applying the effect"
       - "effect parameter label changed"
-      - "AE Reader does not yet expose the effect property"
+      - "AE Reader does not expose enough effect identity/property information"
+
+run_protocol:
+  before_each_run:
+    - "Generate a unique run_id."
+    - "Restore a fresh copy of the skill fixture."
+    - "Open the fixture in After Effects."
+    - "Record exact After Effects build, language, workspace, display resolution, and scaling."
+    - "Read the pre-state with AE Reader."
+    - "Assert every precondition. If any precondition fails, mark BLOCKED and do not execute the skill."
+  during_each_run:
+    - "Measure only the skill's declared UI steps."
+    - "Record every UFO action and action result."
+    - "Capture evidence when the state diverges or execution becomes blocked."
+  after_each_run:
+    - "Read a fresh post-state with AE Reader."
+    - "Compare the post-state against required checks."
+    - "Assign exactly one final status."
+    - "Do not repair the fixture and continue the same measured run."
+    - "Close/discard the disposable fixture copy."
+  repetition_rule:
+    runs_per_skill: 3
+    each_run_starts_from_fresh_fixture: true
+    verified_requires_all_runs_pass: true
+
+status_contract:
+  VERIFIED:
+    condition: "All required checks pass in all 3 independent runs with fresh evidence and no conflicting evidence."
+  UI_CHANGED:
+    condition: "Execution cannot follow the stored UI path/label/layout, but evidence shows the intended capability still exists through a changed UI route."
+  EXECUTION_FAILED:
+    condition: "The agent could not complete the declared UI interaction sequence."
+  VERIFICATION_FAILED:
+    condition: "The agent completed execution, but AE Reader proves the resulting application state is not the expected state."
+  BLOCKED:
+    condition: "The environment, fixture, permissions, crash, unknown modal dialog, or wrong application prevents a valid measured run."
+  INCONCLUSIVE:
+    condition: "Evidence is insufficient, stale, malformed, or contradictory; success must not be inferred."
+
+diagnostic_evidence:
+  required_on_non_verified_run:
+    - "run_id"
+    - "skill_id"
+    - "fixture_id"
+    - "failure_boundary"
+    - "last_successful_step"
+    - "next_intended_step"
+    - "ufo_action_log"
+    - "ufo_action_results"
+    - "ae_reader_pre_state"
+    - "ae_reader_post_state_or_error"
+    - "application_screenshot_before"
+    - "application_screenshot_at_failure"
+    - "visible_ui_controls_at_failure"
+    - "ae_version_and_build"
+    - "workspace"
+    - "display_resolution_and_scaling"
+  optional_analysis_fields:
+    - "suspected_root_cause"
+    - "suspected_ui_change"
+    - "proposed_fix"
+    - "confidence"
+  rule: "Diagnostic model output is analysis only; it cannot change the final status or source specification without a re-test."
+
+correction_workflow:
+  source_spec_is_immutable_during_test: true
+  stages:
+    - "Detect a failure or UI change."
+    - "Create a PROPOSED_FIX record outside the source skill."
+    - "State the old assumption, proposed new route/value, evidence, and reason."
+    - "Run the proposed fix from the same fresh fixture three independent times."
+    - "Only after repeatable success may the fix be marked CONFIRMED_FIX."
+    - "Promotion into the source knowledge base is a separate review step."
 
 report_schema:
   per_run:
+    - "run_id"
     - "skill_id"
+    - "fixture_id"
     - "run_number"
     - "status"
     - "started_at"
     - "finished_at"
     - "ae_version"
+    - "ae_build"
+    - "ae_language"
     - "workspace"
+    - "display_resolution"
+    - "display_scaling"
+    - "precondition_result"
     - "pre_state"
     - "actions_attempted"
+    - "action_results"
     - "post_state"
     - "verification_evidence"
-    - "failure_step"
+    - "failure_boundary"
     - "failure_reason"
     - "suspected_ui_change"
     - "proposed_fix"
     - "screenshot_refs"
   final_skill_decision:
-    verified_when: "3 independent PASS runs with no conflicting evidence"
-    ui_changed_when: "the intended capability still exists but the stored UI path/label/layout is stale"
-    execution_failed_when: "the requested state was not achieved"
-    needs_review_when: "evidence is ambiguous or the verifier cannot observe the required property"
+    verified_when: "3 of 3 independent runs are VERIFIED."
+    otherwise: "Do not collapse mixed outcomes into VERIFIED. Preserve the run-level statuses and require review or re-test."
+
+pilot_acceptance_criteria:
+  system_passes_pilot_when:
+    - "All 30 planned runs produce a valid, auditable status."
+    - "No run is marked VERIFIED without required AE Reader evidence."
+    - "No contaminated fixture is reused as a fresh run."
+    - "The runner distinguishes execution failure from verification failure."
+    - "The runner can stop safely on BLOCKED or unknown UI state."
+    - "Failure evidence is sufficient to reproduce or diagnose the boundary."
+  note: "The pilot does not require all ten skills to be correct. It requires the verification system to classify outcomes truthfully and reproducibly."
