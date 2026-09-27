@@ -78,7 +78,7 @@ environment_contract:
     require_unique_run_id: true
     require_start_timestamp: true
     require_fixture_id: true
-    require_reader_request_id: true
+    require_request_id: true
   preflight:
     - "After Effects process is running."
     - "No unknown modal dialog is open."
@@ -88,7 +88,7 @@ environment_contract:
     - "After Effects language equals en-US."
     - "Workspace identity equals PILOT_WORKSPACE."
     - "The expected fixture state is loaded."
-    - "AE Reader returns a fresh response bound to the current run_id and reader_request_id."
+    - "AE Reader returns a fresh response bound to the current run_id and request_id."
     - "All required AE Reader capabilities for the selected skill are present."
   note: "The pilot intentionally locks language, workspace, resolution, and scaling. Variation testing belongs to a later robustness phase, not the baseline pilot."
 
@@ -154,9 +154,11 @@ state_schema:
               value: "number|string|boolean|null"
 
 ae_reader_contract:
+  expected_reader_version: "2.0.0"
+  expected_schema_version: 2
   freshness_requirements:
     - "Every response contains run_id matching the active run."
-    - "Every response contains reader_request_id matching the request."
+    - "Every response contains request_id matching the request."
     - "Every response contains captured_at timestamp."
     - "A post-state response must be newer than the last measured UFO action."
   capability_manifest_required: true
@@ -703,8 +705,8 @@ skills:
       pre:
         - {path: "layer[name=PILOT_TEXT].effects", op: "count_eq", value: 0}
       post:
-        - {path: "layer[name=PILOT_TEXT].effects", op: "contains_effect_runtime_id", runtime_key: "stable_effect_id"}
-        - {path: "layer[name=PILOT_TEXT].effects[runtime_id=stable_effect_id].property[display_name=Blurriness].value", op: "approx", value: 25, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].effects", op: "contains_effect_stable_id", runtime_key: "stable_effect_id"}
+        - {path: "layer[name=PILOT_TEXT].effects[stable_id=stable_effect_id].property[display_name=Blurriness].value", op: "approx", value: 25, tolerance: 0.001}
     diagnose_on_failure:
       - "effect display name changed"
       - "effect search or menu path changed"
@@ -721,12 +723,12 @@ assertion_operator_contract:
     - "not_contains_layer_name"
     - "count_layer_name"
     - "contains_keyframe"
-    - "contains_effect_runtime_id"
+    - "contains_effect_stable_id"
   rule: "The verifier must reject unknown assertion operators instead of silently ignoring them."
 
 run_protocol:
   before_each_run:
-    - "Generate a unique run_id and reader_request_id."
+    - "Generate a unique run_id and request_id."
     - "Restore a fresh copy of the selected skill fixture."
     - "Open the fixture in After Effects."
     - "Check the locked pilot environment contract."
@@ -741,7 +743,7 @@ run_protocol:
     - "Record the timestamp of the last measured UFO action."
     - "Capture evidence immediately when the state diverges or execution becomes blocked."
   after_each_run:
-    - "Read a fresh post-state with a new reader_request_id."
+    - "Read a fresh post-state with a new request_id."
     - "Verify that the post-state timestamp is newer than the last measured UFO action."
     - "Evaluate every machine-readable post assertion."
     - "Assign exactly one run_status."
@@ -794,14 +796,14 @@ verifier_calibration:
       expected_result: "VERIFICATION_FAILED"
     - id: "CAL-STALE"
       purpose: "Prove stale evidence cannot pass."
-      method: "Replay a previous reader response with a mismatched run_id or reader_request_id."
+      method: "Replay a previous reader response with a mismatched run_id or request_id."
       expected_result: "INCONCLUSIVE"
   gate: "Do not begin the 30 pilot runs unless all calibration controls return their expected results."
 
 diagnostic_evidence:
   required_on_non_pass_run:
     - "run_id"
-    - "reader_request_id"
+    - "request_id"
     - "skill_id"
     - "fixture_id"
     - "failure_boundary"
@@ -840,7 +842,7 @@ report_schema:
   per_run:
     required_fields:
       - "run_id"
-      - "reader_request_id"
+      - "request_id"
       - "skill_id"
       - "fixture_id"
       - "run_number"
