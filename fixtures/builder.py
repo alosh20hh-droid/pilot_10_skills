@@ -105,6 +105,8 @@ class FixtureBuilder:
             )
 
         output = Path(output_path).expanduser()
+        if output.suffix.lower() != ".aep":
+            raise FixtureBuildError("fixture output path must end with .aep")
         output.parent.mkdir(parents=True, exist_ok=True)
         if output.exists():
             raise FixtureBuildError(f"fixture output already exists: {output}")
