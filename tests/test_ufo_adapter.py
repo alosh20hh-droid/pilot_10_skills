@@ -47,7 +47,22 @@ class UFOPlanTests(unittest.TestCase):
         skill = CONTRACT.skill("AE-PILOT-004")
         plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
         self.assertEqual(plan.to_dict()["steps"], skill["measured_ui_steps"])
-        self.assertEqual(plan.to_dict()["task"], skill["goal"])
+        self.assertIn(skill["goal"], plan.to_dict()["task"])
+        self.assertIn("visible UI interactions only", plan.to_dict()["task"])
+
+    def test_compiler_rejects_hidden_script_route(self):
+        import copy
+        bad = copy.deepcopy(CONTRACT.raw)
+        bad["skills"][0]["measured_ui_steps"] = [
+            "Use ExtendScript to create the composition."
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            import yaml
+            path = Path(temp) / "bad.yaml"
+            path.write_text(yaml.safe_dump(bad, sort_keys=False), encoding="utf-8")
+            bad_contract = PilotContract.load(path)
+            with self.assertRaises(Exception):
+                compile_skill_plan(bad_contract, bad_contract.raw["skills"][0]["id"])
 
     def test_plan_hash_is_deterministic(self):
         first = compile_skill_plan(CONTRACT, "AE-PILOT-007")
@@ -135,9 +150,8 @@ class UFORunnerTests(unittest.TestCase):
                 prepared["plan_path"].read_text(encoding="utf-8")
             )
             self.assertEqual(payload["steps"], plan.to_dict()["steps"])
-            self.assertEqual(payload["object"], str(fixture.resolve()))
-            bound_plan = plan.bind_object(str(fixture.resolve()))
-            self.assertEqual(prepared["plan_sha256"], bound_plan.sha256())
+            self.assertEqual(payload["object"], "AfterFX.exe")
+            self.assertEqual(prepared["plan_sha256"], plan.sha256())
             with self.assertRaises(UFOExecutionError):
                 runner.prepare_run(
                     run_id="unique-run",
@@ -162,10 +176,7 @@ class UFORunnerTests(unittest.TestCase):
                 fixture_sha256=fixture_hash,
             )
             self.assertFalse((root / "runs").exists())
-            self.assertEqual(
-                preview["plan_sha256"],
-                plan.bind_object(str(fixture.resolve())).sha256(),
-            )
+            self.assertEqual(preview["plan_sha256"], plan.sha256())
             prepared = runner.prepare_run(
                 run_id="preview-run-1",
                 plan=plan,
