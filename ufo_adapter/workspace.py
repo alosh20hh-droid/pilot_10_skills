@@ -75,6 +75,7 @@ class UFOWorkspaceManager:
             "MAX_ROUND": max_round,
             "MAX_STEP": max_step,
             "SAFE_GUARD": True,
+            "USE_APIS": False,
             "USE_MCP": False,
             "MCP_FALLBACK_TO_UI": False,
             "EVA_SESSION": False,
