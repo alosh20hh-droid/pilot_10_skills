@@ -22,6 +22,7 @@ class UFOWorkspace:
     worktree_root: str
     commit: str
     overlay_path: str
+    mcp_policy_path: str
     max_round: int
     max_step: int
 
@@ -31,6 +32,7 @@ class UFOWorkspace:
             "worktree_root": self.worktree_root,
             "commit": self.commit,
             "overlay_path": self.overlay_path,
+            "mcp_policy_path": self.mcp_policy_path,
             "ufo_env": "test",
             "max_round": self.max_round,
             "max_step": self.max_step,
@@ -93,6 +95,58 @@ class UFOWorkspaceManager:
             "CLICK_API": "click_input",
         }
 
+
+    @staticmethod
+    def build_ui_only_mcp_policy() -> Dict[str, Any]:
+        """
+        UFO's local UI tools are transported through its MCP plumbing. The
+        measured lab must therefore keep only UI collection/execution servers
+        while removing command-line, COM, hardware, Bash, and other action
+        namespaces from the temporary worktree configuration.
+        """
+        return {
+            "HostAgent": {
+                "default": {
+                    "data_collection": [
+                        {
+                            "namespace": "UICollector",
+                            "type": "local",
+                            "start_args": [],
+                            "reset": False,
+                        }
+                    ],
+                    "action": [
+                        {
+                            "namespace": "HostUIExecutor",
+                            "type": "local",
+                            "start_args": [],
+                            "reset": False,
+                        }
+                    ],
+                }
+            },
+            "AppAgent": {
+                "default": {
+                    "data_collection": [
+                        {
+                            "namespace": "UICollector",
+                            "type": "local",
+                            "start_args": [],
+                            "reset": False,
+                        }
+                    ],
+                    "action": [
+                        {
+                            "namespace": "AppUIExecutor",
+                            "type": "local",
+                            "start_args": [],
+                            "reset": False,
+                        }
+                    ],
+                }
+            },
+        }
+
     def _git(self, *args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
@@ -115,6 +169,7 @@ class UFOWorkspaceManager:
             raise UFOWorkspaceError("a full pinned UFO commit SHA is required")
 
         overlay = self.build_overlay(measured_step_count)
+        mcp_policy = self.build_ui_only_mcp_policy()
 
         self.base_dir.mkdir(parents=True, exist_ok=True)
         target = Path(tempfile.mkdtemp(prefix="run-", dir=self.base_dir))
@@ -154,11 +209,26 @@ class UFOWorkspaceManager:
                 encoding="utf-8",
             )
 
+            mcp_policy_path = config_dir / "mcp.yaml"
+            if not mcp_policy_path.is_file():
+                raise UFOWorkspaceError(
+                    "pinned UFO revision is missing config/ufo/mcp.yaml"
+                )
+            mcp_policy_path.write_text(
+                yaml.safe_dump(
+                    mcp_policy,
+                    sort_keys=True,
+                    allow_unicode=True,
+                ),
+                encoding="utf-8",
+            )
+
             return UFOWorkspace(
                 source_checkout=str(self.source_checkout),
                 worktree_root=str(target.resolve()),
                 commit=commit,
                 overlay_path=str(overlay_path.resolve()),
+                mcp_policy_path=str(mcp_policy_path.resolve()),
                 max_round=int(overlay["MAX_ROUND"]),
                 max_step=int(overlay["MAX_STEP"]),
             )
