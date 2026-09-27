@@ -57,6 +57,22 @@ def synthetic_evidence(contract, fixture_id, project_path, *, run_id="cert-run",
     }
 
 
+
+def synthetic_builder_result(fixture_id, path, *, version="26.0", language="en-US", saved_at=100.0):
+    return {
+        "status": "SAVED",
+        "fixture_id": fixture_id,
+        "output_path": str(Path(path).resolve()),
+        "started_at": saved_at - 2,
+        "finished_at": saved_at + 1,
+        "saved_at": saved_at,
+        "ae_version": version,
+        "ae_build_name": "test-build",
+        "ae_build_number": 1,
+        "ae_language": language,
+    }
+
+
 class FixtureSpecTests(unittest.TestCase):
     def setUp(self):
         self.contract = load_contract()
@@ -131,6 +147,13 @@ class FixtureBuilderSourceTests(unittest.TestCase):
         self.assertIn("for (var i = layers.length - 1; i >= 0; i--)", source)
         self.assertIn("Validate final top-to-bottom order", source)
 
+    def test_builder_publishes_result_atomically(self):
+        source = (ROOT / "fixtures" / "scripts" / "build_fixture.jsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('new File(path + ".tmp")', source)
+        self.assertIn("temporary.rename(finalFile.name)", source)
+
     def test_builder_refuses_measured_keyframes_and_effects(self):
         source = (ROOT / "fixtures" / "scripts" / "build_fixture.jsx").read_text(
             encoding="utf-8"
@@ -162,7 +185,7 @@ class FixtureRepositoryTests(unittest.TestCase):
             expected_run_id="cert-run",
             expected_request_id="cert-request",
             min_captured_at=10,
-            builder_result={"status": "SAVED"},
+            builder_result=synthetic_builder_result(fixture_id, path),
         )
         return path, record
 
@@ -227,6 +250,77 @@ class FixtureRepositoryTests(unittest.TestCase):
                 expected_request_id="cert-request",
                 min_captured_at=10,
             )
+
+
+    def test_certification_requires_builder_metadata(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=None,
+            )
+
+    def test_wrong_builder_ae_major_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=synthetic_builder_result(
+                    fixture_id, path, version="25.6"
+                ),
+            )
+
+    def test_wrong_reader_language_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        evidence["application"]["language"] = "de-DE"
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=synthetic_builder_result(fixture_id, path),
+            )
+
+    def test_locale_separator_variation_is_accepted(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        evidence["application"]["language"] = "en_US"
+        record = self.repository.certify(
+            fixture_id,
+            aep_path=path,
+            evidence=evidence,
+            expected_run_id="cert-run",
+            expected_request_id="cert-request",
+            min_captured_at=10,
+            builder_result=synthetic_builder_result(
+                fixture_id, path, language="en_US"
+            ),
+        )
+        self.assertEqual(record["status"], "CERTIFIED")
 
     def test_tampered_canonical_file_is_rejected(self):
         path, _ = self._certify()
@@ -309,6 +403,10 @@ class _FakeBuilder:
             "started_at": 10.0,
             "finished_at": 11.0,
             "saved_at": 10.5,
+            "ae_version": "26.0",
+            "ae_build_name": "test-build",
+            "ae_build_number": 1,
+            "ae_language": "en-US",
         }
 
 
