@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -39,7 +40,7 @@ class UFOExecutionResult:
     ufo_commit: str
 
     @property
-    def completed(self) -> bool:
+    def process_exit_ok(self) -> bool:
         return self.exit_code == 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -51,12 +52,20 @@ class UFOExecutionResult:
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "exit_code": self.exit_code,
-            "completed": self.completed,
+            "process_exit_ok": self.process_exit_ok,
             "stdout_path": self.stdout_path,
             "stderr_path": self.stderr_path,
             "ufo_checkout": self.ufo_checkout,
             "ufo_commit": self.ufo_commit,
         }
+
+
+def _validate_run_id(value: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", value):
+        raise UFOExecutionError(
+            "run_id must contain only letters, numbers, dot, underscore, or hyphen"
+        )
+    return value
 
 
 def _safe_name(value: str) -> str:
@@ -124,8 +133,7 @@ class UFOMeasuredRunner:
         run_id: str,
         plan: UFOPlan,
     ) -> Dict[str, Any]:
-        if not isinstance(run_id, str) or not run_id:
-            raise UFOExecutionError("run_id must be a non-empty string")
+        run_id = _validate_run_id(run_id)
 
         run_key = _safe_name(run_id)
         run_dir = self.output_root / run_key
@@ -136,13 +144,11 @@ class UFOMeasuredRunner:
         plan_path = run_dir / "plan.json"
         metadata_path = run_dir / "metadata.json"
 
-        plan_payload = plan.to_dict()
-        plan_path.write_text(
-            json.dumps(plan_payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        plan_path.write_bytes(plan.serialized_bytes())
 
         plan_hash = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+        if plan_hash != plan.sha256():
+            raise UFOExecutionError("serialized UFO plan hash mismatch")
         metadata = {
             "run_id": run_id,
             "skill_id": plan.skill_id,
@@ -163,6 +169,27 @@ class UFOMeasuredRunner:
             "plan_path": plan_path,
             "metadata_path": metadata_path,
             "plan_sha256": plan_hash,
+        }
+
+    def preview_command(
+        self,
+        *,
+        run_id: str,
+        plan: UFOPlan,
+    ) -> Dict[str, Any]:
+        run_id = _validate_run_id(run_id)
+        run_key = _safe_name(run_id)
+        plan_path = self.output_root / run_key / "plan.json"
+        command = self.build_command(
+            task_name=f"pilot/{plan.skill_id}/{run_id}",
+            plan_path=plan_path,
+        )
+        return {
+            "run_id": run_id,
+            "run_key": run_key,
+            "plan_path": str(plan_path),
+            "plan_sha256": plan.sha256(),
+            "command": command,
         }
 
     def execute(
