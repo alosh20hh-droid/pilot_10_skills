@@ -24,6 +24,18 @@ CONTRACT = PilotContract.load(ROOT / "pilot_10_skills.yaml")
 def make_fake_git_ufo(root: Path):
     files = {
         "config/ufo/system.yaml": "MAX_ROUND: 1\nCONTROL_BACKEND: [uia]\n",
+        "config/ufo/mcp.yaml": (
+            "HostAgent:\n"
+            "  default:\n"
+            "    action:\n"
+            "      - namespace: CommandLineExecutor\n"
+            "        type: local\n"
+            "AppAgent:\n"
+            "  default:\n"
+            "    action:\n"
+            "      - namespace: CommandLineExecutor\n"
+            "        type: local\n"
+        ),
         "ufo/__main__.py": "# fake\n",
     }
     for relative, content in files.items():
@@ -111,10 +123,21 @@ class UFOLockTests(unittest.TestCase):
         self.assertIn("batch_normal", lock["forbidden_modes"])
         self.assertIn("config/config_loader.py", lock["required_files"])
         self.assertIn("ufo/module/basic.py", lock["required_files"])
+        self.assertIn("config/ufo/mcp.yaml", lock["required_files"])
+        self.assertIn("ufo/client/computer.py", lock["required_files"])
+        self.assertIn("ufo/module/dispatcher.py", lock["required_files"])
         self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_APIS"])
         self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_MCP"])
         self.assertEqual(lock["execution_overlay"]["environment"], "test")
         self.assertEqual(lock["execution_overlay"]["file"], "config/ufo/system_test.yaml")
+        self.assertEqual(
+            lock["execution_route_policy"]["allowed_action_namespaces"],
+            ["HostUIExecutor", "AppUIExecutor"],
+        )
+        self.assertIn(
+            "CommandLineExecutor",
+            lock["execution_route_policy"]["forbidden_namespaces"],
+        )
 
     def test_audited_controller_capabilities_are_declared(self):
         lock = load_upstream_lock()
@@ -140,6 +163,39 @@ class UFOWorkspaceTests(unittest.TestCase):
         self.assertEqual(overlay["MAX_ROUND"], 6)
         self.assertGreaterEqual(overlay["MAX_STEP"], 50)
 
+    def test_mcp_policy_exposes_only_ui_collection_and_ui_actions(self):
+        policy = UFOWorkspaceManager.build_ui_only_mcp_policy()
+        self.assertEqual(set(policy), {"HostAgent", "AppAgent"})
+
+        host = policy["HostAgent"]["default"]
+        app = policy["AppAgent"]["default"]
+        self.assertEqual(
+            [item["namespace"] for item in host["data_collection"]],
+            ["UICollector"],
+        )
+        self.assertEqual(
+            [item["namespace"] for item in host["action"]],
+            ["HostUIExecutor"],
+        )
+        self.assertEqual(
+            [item["namespace"] for item in app["data_collection"]],
+            ["UICollector"],
+        )
+        self.assertEqual(
+            [item["namespace"] for item in app["action"]],
+            ["AppUIExecutor"],
+        )
+        serialized = json.dumps(policy)
+        for forbidden in (
+            "CommandLineExecutor",
+            "WordCOMExecutor",
+            "ExcelCOMExecutor",
+            "PowerPointCOMExecutor",
+            "BashExecutor",
+            "HardwareExecutor",
+        ):
+            self.assertNotIn(forbidden, serialized)
+
     def test_overlay_is_written_only_to_detached_worktree(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "ufo"
@@ -164,6 +220,19 @@ class UFOWorkspaceTests(unittest.TestCase):
                 self.assertFalse(overlay["USE_APIS"])
                 self.assertFalse(overlay["USE_MCP"])
                 self.assertEqual(overlay["MAX_ROUND"], 5)
+
+                mcp_path = Path(workspace.mcp_policy_path)
+                self.assertTrue(mcp_path.is_file())
+                safe_mcp = yaml.safe_load(mcp_path.read_text(encoding="utf-8"))
+                safe_text = json.dumps(safe_mcp)
+                self.assertIn("HostUIExecutor", safe_text)
+                self.assertIn("AppUIExecutor", safe_text)
+                self.assertNotIn("CommandLineExecutor", safe_text)
+
+                original_mcp = (root / "config" / "ufo" / "mcp.yaml").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("CommandLineExecutor", original_mcp)
             finally:
                 manager.remove(workspace.worktree_root)
 
