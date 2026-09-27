@@ -16,4 +16,9 @@ __all__ = [
     "UFOExecutionError",
     "UFOExecutionResult",
     "UFOMeasuredRunner",
+    "UFOWorkspace",
+    "UFOWorkspaceError",
+    "UFOWorkspaceManager",
 ]
+
+from .workspace import UFOWorkspace, UFOWorkspaceError, UFOWorkspaceManager
