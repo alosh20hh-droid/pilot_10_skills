@@ -5,6 +5,7 @@
     "application.version",
     "application.language",
     "project.composition_count",
+    "project.file_identity",
     "composition.identity",
     "composition.dimensions",
     "composition.duration",
