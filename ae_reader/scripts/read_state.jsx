@@ -422,6 +422,11 @@ function readJsonFile(path) {
 }
 
 function writeResponse(response) {
+    /*
+     * captured_at marks publication of the completed snapshot, not the start
+     * of collection. This makes freshness checks conservative and unambiguous.
+     */
+    response.captured_at = (new Date()).getTime() / 1000.0;
     var scriptFile = new File($.fileName);
     var directory = scriptFile.parent;
     var temporary = new File(directory.fsName + "/response.tmp");
@@ -480,8 +485,6 @@ function writeResponse(response) {
         response.lesson_id = request.lesson_id === undefined ? null : request.lesson_id;
         response.step_id = request.step_id === undefined ? null : request.step_id;
         response.capabilities = capabilities;
-        response.captured_at = (new Date()).getTime() / 1000.0;
-
         if (!app.project) {
             response.status = "NO_PROJECT";
             response.errors.push("No project is open.");
