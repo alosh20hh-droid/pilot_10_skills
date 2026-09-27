@@ -502,6 +502,52 @@ class PostVerificationTests(unittest.TestCase):
         self.assertEqual(decision.run_status, "INCONCLUSIVE")
         self.assertEqual(decision.reason_code, "READER_NOT_OK")
 
+    def test_post_state_from_different_fixture_is_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                request_id="post-1",
+                captured_at=40,
+                file_path=r"C:\\pilot\\run\\different.aep",
+            ),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(
+            decision.reason_code,
+            "POST_FIXTURE_IDENTITY_MISMATCH",
+        )
+
+    def test_ui_change_evidence_does_not_override_completed_verified_run(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                request_id="post-1",
+                captured_at=40,
+            ),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+            ui_change_evidence={
+                "route_changed": True,
+                "capability_still_exists": True,
+                "evidence": "route changed but execution still completed",
+            },
+        )
+        self.assertEqual(decision.run_status, "PASS")
+
     def test_wrong_post_state_is_verification_failed(self):
         state = fixture_state("AE-PILOT-004")
         decision = self.verifier.verify_post(
