@@ -95,10 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             results = []
             for plan in compile_all_plans(contract):
                 target = output / f"{plan.skill_id}.json"
-                target.write_text(
-                    json.dumps(plan.to_dict(), ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                target.write_bytes(plan.serialized_bytes())
                 results.append({
                     "skill_id": plan.skill_id,
                     "fixture_id": plan.fixture_id,
@@ -117,17 +114,14 @@ def main(argv: list[str] | None = None) -> int:
             plan = compile_skill_plan(contract, args.skill_id)
             runner = UFOMeasuredRunner(args.ufo_checkout)
             checkout = runner.validate_environment()
-            prepared = runner.prepare_run(run_id=args.run_id, plan=plan)
-            command = runner.build_command(
-                task_name=f"pilot/{plan.skill_id}/{args.run_id}",
-                plan_path=prepared["plan_path"],
-            )
+            preview = runner.preview_command(run_id=args.run_id, plan=plan)
             _print({
                 "status": "READY",
                 "checkout": checkout,
-                "plan_sha256": prepared["plan_sha256"],
-                "command": command,
-                "note": "Command prepared only; UFO was not executed.",
+                "plan_sha256": preview["plan_sha256"],
+                "future_plan_path": preview["plan_path"],
+                "command": preview["command"],
+                "note": "Preview only; no run directory was created and the run_id remains unused.",
             })
             return 0
 
@@ -141,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
                 timeout=args.timeout,
             )
             _print(result.to_dict())
-            return 0 if result.completed else 2
+            return 0 if result.process_exit_ok else 2
 
         return 2
 
