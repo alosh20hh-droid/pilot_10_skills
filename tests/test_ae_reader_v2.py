@@ -175,6 +175,12 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(prop.value, 25)
 
 
+
+    def test_non_finite_capture_timestamp_is_rejected(self):
+        data = sample_response(captured_at=float("nan"))
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
     def test_non_string_reader_error_is_rejected(self):
         data = sample_response()
         data["errors"] = [123]
