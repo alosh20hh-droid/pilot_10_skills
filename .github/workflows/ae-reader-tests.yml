@@ -1,10 +1,12 @@
-name: AE verification systems
+name: AE verification lab systems
 
 on:
   push:
     paths:
       - "ae_reader/**"
       - "verifier/**"
+      - "fixtures/**"
+      - "fixtures/**"
       - "tests/**"
       - "requirements.txt"
       - "pilot_10_skills.yaml"
@@ -36,5 +38,7 @@ jobs:
         run: python -m verifier.cli validate-contract
       - name: Verifier calibration
         run: python -m verifier.cli calibrate
+      - name: Fixture specification validation
+        run: python -m fixtures.cli validate-specs
       - name: Unit tests
         run: python -m unittest discover -s tests -v
