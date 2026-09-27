@@ -977,6 +977,7 @@ class CalibrationTests(unittest.TestCase):
             fixture_id="FX-002-COMP-EMPTY",
             expected_run_id="cal-live-run",
             expected_request_id="cal-live-request",
+            expected_fixture_path=TEST_FIXTURE_PATH,
             min_captured_at=10,
         )
         self.assertTrue(result["passed"])
@@ -984,6 +985,28 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(result["controls"]["CAL-POSITIVE"]["actual"], "PASS")
         self.assertEqual(result["controls"]["CAL-NEGATIVE"]["actual"], "VERIFICATION_FAILED")
         self.assertEqual(result["controls"]["CAL-STALE"]["actual"], "INCONCLUSIVE")
+
+
+    def test_pilot_calibration_rejects_wrong_fixture_identity(self):
+        c = contract()
+        evidence = evidence_for(
+            fixture_state("AE-PILOT-002"),
+            run_id="cal-live-run",
+            request_id="cal-live-request",
+            captured_at=20,
+            file_path=r"C:\\pilot\\run\\wrong.aep",
+        )
+        result = run_pilot_calibration(
+            c,
+            evidence=evidence,
+            fixture_id="FX-002-COMP-EMPTY",
+            expected_run_id="cal-live-run",
+            expected_request_id="cal-live-request",
+            expected_fixture_path=TEST_FIXTURE_PATH,
+            min_captured_at=10,
+        )
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["satisfies_pilot_gate"])
 
     def test_pilot_calibration_rejects_stale_canonical_evidence(self):
         c = contract()
@@ -999,6 +1022,7 @@ class CalibrationTests(unittest.TestCase):
             fixture_id="FX-002-COMP-EMPTY",
             expected_run_id="cal-live-run",
             expected_request_id="cal-live-request",
+            expected_fixture_path=TEST_FIXTURE_PATH,
             min_captured_at=10,
         )
         self.assertFalse(result["passed"])
