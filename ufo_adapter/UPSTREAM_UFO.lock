@@ -1,0 +1,38 @@
+{
+  "upstream_repository": "microsoft/UFO",
+  "release_tag": "v3.0.10",
+  "commit_sha": "e2a03126241c696fdaf9a669a271ca3fca6d9916",
+  "verified_identical_tag_and_commit": true,
+  "verified_at": "2026-09-27",
+  "required_files": {
+    "ufo/ufo.py": "ca810d573c5c6b004d7b59e1fcf88aa3619b813a",
+    "ufo/module/sessions/plan_reader.py": "077c5dfa54e7770d30f71067bda07e31eae95331",
+    "ufo/module/sessions/session.py": "d7b156fa41c6bd631de469f82322fcdfac42b180",
+    "ufo/automator/ui_control/controller.py": "9391b9f30c805fe567358d64671458db88d17d62",
+    "config/ufo/system.yaml": "878e2d3a401cf5fd5a53f804241ad8108931639d",
+    "documents/docs/ufo2/advanced_usage/follower_mode.md": "3fd6fe85a5e89fbc24c7fae2ae92d56bc1ae2dcd"
+  },
+  "verified_contract": {
+    "cli_mode": "follower",
+    "cli_command_shape": "python -m ufo --task <task> --mode follower --plan <plan>",
+    "plan_fields": ["task", "steps", "object"],
+    "control_backend_baseline": ["uia"],
+    "verified_controller_capabilities": [
+      "click_input",
+      "click_on_coordinates",
+      "drag_on_coordinates",
+      "set_edit_text",
+      "wheel_mouse_input",
+      "keyboard_input",
+      "click",
+      "double_click",
+      "drag",
+      "keypress",
+      "move",
+      "scroll",
+      "type",
+      "wait",
+      "annotation"
+    ]
+  }
+}
