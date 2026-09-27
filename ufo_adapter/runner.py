@@ -61,9 +61,17 @@ class UFOExecutionResult:
 
 
 def _validate_run_id(value: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", value):
+    if (
+        not isinstance(value, str)
+        or len(value) > 128
+        or not re.fullmatch(
+            r"[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?",
+            value,
+        )
+    ):
         raise UFOExecutionError(
-            "run_id must contain only letters, numbers, dot, underscore, or hyphen"
+            "run_id must be 1-128 characters, start/end with a letter or number, "
+            "and contain only letters, numbers, dot, underscore, or hyphen"
         )
     return value
 
@@ -138,10 +146,12 @@ class UFOMeasuredRunner:
     def _bind_fixture(
         self,
         *,
+        run_id: str,
         plan: UFOPlan,
         fixture_path: str | Path,
         fixture_sha256: str,
     ) -> tuple[UFOPlan, Path]:
+        run_id = _validate_run_id(run_id)
         path = Path(fixture_path).expanduser().resolve()
         if not path.is_file():
             raise UFOExecutionError(f"disposable fixture file not found: {path}")
@@ -150,6 +160,11 @@ class UFOMeasuredRunner:
         if path.name != f"{plan.fixture_id}.aep":
             raise UFOExecutionError(
                 "fixture filename does not match the skill's declared fixture_id"
+            )
+        expected_run_key = _safe_name(run_id)
+        if path.parent.name != expected_run_key:
+            raise UFOExecutionError(
+                "fixture must come from the run-specific disposable fixture workspace"
             )
         if not isinstance(fixture_sha256, str) or not re.fullmatch(
             r"[0-9a-fA-F]{64}",
@@ -176,6 +191,7 @@ class UFOMeasuredRunner:
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
         execution_plan, bound_fixture_path = self._bind_fixture(
+            run_id=run_id,
             plan=plan,
             fixture_path=fixture_path,
             fixture_sha256=fixture_sha256,
@@ -230,6 +246,7 @@ class UFOMeasuredRunner:
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
         execution_plan, bound_fixture_path = self._bind_fixture(
+            run_id=run_id,
             plan=plan,
             fixture_path=fixture_path,
             fixture_sha256=fixture_sha256,
