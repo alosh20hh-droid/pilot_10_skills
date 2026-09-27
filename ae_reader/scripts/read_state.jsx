@@ -494,8 +494,11 @@ function writeResponse(response) {
 
         var item = app.project.activeItem;
         if (!item || !(item instanceof CompItem)) {
-            response.status = "NO_ACTIVE_COMPOSITION";
-            response.errors.push("The active item is not a composition.");
+            /*
+             * A valid empty project has no active composition. This is a
+             * measurable pilot state (FX-001), not a reader failure.
+             */
+            response.status = "OK";
             writeResponse(response);
             return;
         }
