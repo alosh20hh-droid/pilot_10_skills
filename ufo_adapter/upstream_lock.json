@@ -52,8 +52,8 @@
     "ufo/module/basic.py": "505fed97b28bc4e38a2eada608a4663020cd57df"
   },
   "execution_overlay": {
-    "environment": "pilot",
-    "file": "config/ufo/system_pilot.yaml",
+    "environment": "test",
+    "file": "config/ufo/system_test.yaml",
     "required_settings": {
       "CONTROL_BACKEND": [
         "uia"
