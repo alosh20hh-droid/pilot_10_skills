@@ -623,7 +623,7 @@ class PostVerificationTests(unittest.TestCase):
             runtime={"stable_effect_id": "ADBE Gaussian Blur 2"},
             expected_ae_build="26.0-test",
         )
-        self.assertTrue(preflight.can_execute)
+        self.assertTrue(preflight.can_execute, preflight.to_dict())
 
         state = fixture_state("AE-PILOT-010")
         state["layers"][0]["effects"] = [
