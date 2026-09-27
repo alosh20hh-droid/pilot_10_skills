@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import ntpath
 from numbers import Real
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -14,6 +15,12 @@ from .model import (
     RunDecision,
     SkillDecision,
 )
+
+
+def _same_windows_path(left: str, right: str) -> bool:
+    return ntpath.normcase(ntpath.normpath(left)) == ntpath.normcase(
+        ntpath.normpath(right)
+    )
 
 
 def _is_number(value: Any) -> bool:
@@ -334,6 +341,11 @@ def check_environment(
             "actual": actual.get("workspace_id"),
         }
 
+    fixture_path = actual.get("fixture_path")
+    if not isinstance(fixture_path, str) or not fixture_path.strip():
+        return False, "FIXTURE_IDENTITY_REQUIRED", "expected fixture_path is missing", details
+    details["expected_fixture_path"] = fixture_path
+
     observed_build = actual.get("ae_build")
     details["observed_ae_build"] = observed_build
     if expected_ae_build is not None and observed_build != expected_ae_build:
@@ -445,7 +457,8 @@ class DeterministicVerifier:
             )
 
         supported = set(evidence_check.details.get("supported_capabilities") or [])
-        required = set(self.contract.required_capabilities(skill_id))
+        system_required = {"project.file_identity"}
+        required = set(self.contract.required_capabilities(skill_id)) | system_required
         missing = sorted(required - supported)
         if missing:
             return PreflightDecision(
@@ -454,6 +467,30 @@ class DeterministicVerifier:
                 "READER_CAPABILITY_MISSING",
                 "required AE Reader capabilities are absent",
                 details={"missing_capabilities": missing},
+            )
+
+        project_state = (evidence_check.state or {}).get("project")
+        observed_fixture_path = (
+            project_state.get("file_path")
+            if isinstance(project_state, dict)
+            else None
+        )
+        expected_fixture_path = environment.get("fixture_path")
+        if (
+            not isinstance(observed_fixture_path, str)
+            or not observed_fixture_path
+            or not isinstance(expected_fixture_path, str)
+            or not _same_windows_path(observed_fixture_path, expected_fixture_path)
+        ):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "FIXTURE_IDENTITY_MISMATCH",
+                "AE Reader project file does not match the expected disposable fixture copy",
+                details={
+                    "expected_fixture_path": expected_fixture_path,
+                    "observed_fixture_path": observed_fixture_path,
+                },
             )
 
         calibration_ok, calibration_reason, resolved_calibration = _runtime_calibration_check(
