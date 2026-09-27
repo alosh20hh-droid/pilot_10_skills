@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import platform
 from numbers import Real
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -243,6 +242,13 @@ def validate_evidence(
             f"AE Reader returned {status}",
             details={"errors": list(evidence.get("errors") or [])},
         )
+    if errors:
+        return EvidenceValidation(
+            False,
+            "CONTRADICTORY_EVIDENCE",
+            "AE Reader returned OK together with non-empty errors",
+            details={"errors": list(errors)},
+        )
 
     state = evidence.get("state")
     if not isinstance(state, dict):
@@ -273,11 +279,18 @@ def check_environment(
     if actual.get("after_effects_process_running") is not True:
         return False, "AE_PROCESS_NOT_RUNNING", "After Effects process is not running", details
 
-    if actual.get("unknown_modal_dialog") is True:
-        return False, "UNKNOWN_MODAL_DIALOG", "unknown modal dialog is open", details
+    modal_state = actual.get("unknown_modal_dialog")
+    if modal_state is not False:
+        return False, (
+            "UNKNOWN_MODAL_DIALOG" if modal_state is True else "ENVIRONMENT_MISSING"
+        ), (
+            "unknown modal dialog is open"
+            if modal_state is True
+            else "unknown_modal_dialog evidence must explicitly be false"
+        ), details
 
     expected_os = contract.get("operating_system")
-    actual_os = actual.get("operating_system") or platform.system()
+    actual_os = actual.get("operating_system")
     if expected_os and actual_os != expected_os:
         return False, "ENVIRONMENT_MISMATCH", f"operating system must be {expected_os}", {
             "expected": expected_os,
