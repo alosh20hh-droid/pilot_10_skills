@@ -426,7 +426,7 @@ class UFOMeasuredRunner:
             ) from exc
 
         env = os.environ.copy()
-        env["UFO_ENV"] = "pilot"
+        env["UFO_ENV"] = "test"
         env["PYTHONUTF8"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
 
