@@ -1,8 +1,8 @@
-format_version: "1.1"
+format_version: "1.2"
 
 pilot:
   name: "AE 10-Skill Verification Pilot"
-  purpose: "Validate ten After Effects UI skills independently, with deterministic preconditions and fail-closed verification."
+  purpose: "Validate ten After Effects UI skills independently, with deterministic fixtures, machine-readable assertions, and fail-closed verification."
   application: "Adobe After Effects"
   target_version: "2026 / 26.x"
   execution_mode: "UI_ONLY"
@@ -14,13 +14,24 @@ pilot:
     - "AE_READER"
     - "WINDOWS_UI_AUTOMATION"
     - "VISION"
-  allowed_final_status:
-    - "VERIFIED"
-    - "UI_CHANGED"
-    - "EXECUTION_FAILED"
-    - "VERIFICATION_FAILED"
-    - "BLOCKED"
-    - "INCONCLUSIVE"
+
+status_model:
+  run_status:
+    description: "Status assigned to one independent execution attempt."
+    allowed:
+      - "PASS"
+      - "UI_CHANGED"
+      - "EXECUTION_FAILED"
+      - "VERIFICATION_FAILED"
+      - "BLOCKED"
+      - "INCONCLUSIVE"
+  skill_status:
+    description: "Aggregate status assigned only after all required independent runs."
+    allowed:
+      - "VERIFIED"
+      - "NOT_VERIFIED"
+      - "NEEDS_REVIEW"
+    verified_rule: "Exactly 3 of 3 required runs must have run_status PASS, with fresh AE Reader evidence and no conflicting evidence."
 
 independence_policy:
   skills_must_not_depend_on_previous_skill_runs: true
@@ -28,24 +39,25 @@ independence_policy:
   restore_fresh_fixture_before_every_run: true
   never_use_undo_as_primary_reset: true
   stop_batch_after_environment_contamination: true
-  note: "The fixtures below are state specifications. Actual .aep fixture files will be materialized later and must match these states before measured execution begins."
+  note: "The fixture definitions below are canonical state specifications. Actual .aep fixture files will be created later and must be proven to match these specifications before measured execution begins."
 
 fail_closed_policy:
-  - "Never mark VERIFIED from the agent's own FINISH status."
-  - "Never mark VERIFIED from screenshots alone when AE Reader can inspect the target property."
-  - "If required AE Reader evidence is missing, malformed, stale, or ambiguous, return INCONCLUSIVE."
-  - "If the UI action completed but the expected AE state does not match, return VERIFICATION_FAILED."
-  - "If the intended capability still exists but a stored label/path/control location changed, return UI_CHANGED only when evidence supports that conclusion."
-  - "If an unexpected dialog, permission issue, crash, wrong application, or broken fixture prevents execution, return BLOCKED."
-  - "A single successful run is never enough for VERIFIED."
+  - "Never assign run_status PASS from the agent's own FINISH status."
+  - "Never assign run_status PASS from screenshots alone when AE Reader can inspect the target state."
+  - "If a required AE Reader capability is absent, do not execute that skill; assign BLOCKED with reason READER_CAPABILITY_MISSING."
+  - "If AE Reader evidence is missing, malformed, stale, or ambiguous after execution, assign INCONCLUSIVE."
+  - "If the UI action sequence finishes but the expected AE state does not match, assign VERIFICATION_FAILED."
+  - "Assign UI_CHANGED only when evidence supports that the capability still exists but the stored UI route, label, or layout changed."
+  - "If an unexpected dialog, permission issue, crash, wrong application, broken fixture, or environment mismatch prevents a valid run, assign BLOCKED."
+  - "A single successful run never produces skill_status VERIFIED."
 
 execution_rules:
-  - "Never use fixed screen coordinates as the only way to locate a control."
+  - "Never use fixed absolute screen coordinates as the only way to locate a control."
   - "Prefer semantic UI controls, labels, application state, and relative targeting."
-  - "Use keyboard shortcuts only when they are standard UI interactions, not scripts or hidden automation."
-  - "Do not use ExtendScript, expressions, scripting APIs, direct project-file mutation, or application automation APIs to perform the skill under test."
-  - "AE Reader is read-only and may be used before and after the measured action."
-  - "Capture evidence at the failure boundary before recovery or reset."
+  - "Use keyboard shortcuts only when they are standard visible UI interactions, not scripts or hidden automation."
+  - "Do not use ExtendScript, expressions, scripting APIs, direct .aep mutation, COM automation, or application APIs to perform the skill under test."
+  - "AE Reader is strictly read-only and may be used before and after measured execution."
+  - "Capture evidence at the failure boundary before any recovery or reset."
   - "Do not modify the source skill specification automatically after a failure."
   - "A proposed correction must be stored separately and re-tested from a fresh fixture."
   - "Abort the current run if After Effects loses focus to an unknown application or an unknown modal dialog appears."
@@ -53,22 +65,129 @@ execution_rules:
 environment_contract:
   operating_system: "Windows"
   display:
-    target_resolution: "1920x1080"
-    scaling: "record_actual_value"
+    required_resolution: "1920x1080"
+    required_scaling_percent: 100
+    mismatch_action: "BLOCKED"
   after_effects:
-    version: "record_exact_build"
-    language: "record_actual_language"
-    workspace: "record_actual_workspace"
+    required_major_version: 26
+    exact_build_policy: "record_and_pin_for_pilot_batch"
+    required_language: "en-US"
+    required_workspace_id: "PILOT_WORKSPACE"
+    mismatch_action: "BLOCKED"
   run_identity:
     require_unique_run_id: true
     require_start_timestamp: true
     require_fixture_id: true
+    require_reader_request_id: true
   preflight:
     - "After Effects process is running."
     - "No unknown modal dialog is open."
+    - "Display resolution equals 1920x1080."
+    - "Display scaling equals 100 percent."
+    - "After Effects major version equals 26."
+    - "After Effects language equals en-US."
+    - "Workspace identity equals PILOT_WORKSPACE."
     - "The expected fixture state is loaded."
-    - "AE Reader returns a fresh response for the current run."
-    - "The actual application/build/workspace/display metadata is recorded."
+    - "AE Reader returns a fresh response bound to the current run_id and reader_request_id."
+    - "All required AE Reader capabilities for the selected skill are present."
+  note: "The pilot intentionally locks language, workspace, resolution, and scaling. Variation testing belongs to a later robustness phase, not the baseline pilot."
+
+comparison_policy:
+  default_numeric_absolute_tolerance: 0.001
+  percent_absolute_tolerance: 0.001
+  pixel_absolute_tolerance: 0.01
+  duration_seconds_absolute_tolerance: 0.001
+  frame_rate_absolute_tolerance: 0.001
+  keyframe_time_policy:
+    primary_unit: "frame"
+    frame_tolerance: 0
+    secondary_seconds_tolerance: 0.001
+  string_policy: "exact"
+  list_order_policy: "exact_when_asserted"
+  rule: "Assertions must declare an operator. Numeric equality uses the declared tolerance instead of raw floating-point equality."
+
+state_schema:
+  active_comp:
+    name: "string"
+    width: "number"
+    height: "number"
+    duration_seconds: "number"
+    frame_rate: "number"
+    current_time_seconds: "number|null"
+    current_time_frame: "integer|null"
+  layers:
+    type: "list"
+    item:
+      name: "string"
+      type: "string"
+      source_text: "string|null"
+      index: "integer|null"
+      in_seconds: "number|null"
+      out_seconds: "number|null"
+      transform:
+        position:
+          x: "number|null"
+          y: "number|null"
+        scale:
+          x_percent: "number|null"
+          y_percent: "number|null"
+        opacity_percent: "number|null"
+      properties:
+        opacity:
+          keyframe_count: "integer|null"
+          keyframes:
+            type: "list"
+            item:
+              frame: "integer|null"
+              time_seconds: "number|null"
+              value: "number|null"
+      effects:
+        type: "list"
+        item:
+          display_name: "string"
+          stable_id: "string|null"
+          properties:
+            type: "list"
+            item:
+              display_name: "string"
+              stable_id: "string|null"
+              value: "number|string|boolean|null"
+
+ae_reader_contract:
+  freshness_requirements:
+    - "Every response contains run_id matching the active run."
+    - "Every response contains reader_request_id matching the request."
+    - "Every response contains captured_at timestamp."
+    - "A post-state response must be newer than the last measured UFO action."
+  capability_manifest_required: true
+  manifest_fields:
+    - "reader_version"
+    - "schema_version"
+    - "supported_capabilities"
+  known_capability_ids:
+    - "project.composition_count"
+    - "composition.identity"
+    - "composition.dimensions"
+    - "composition.duration"
+    - "composition.frame_rate"
+    - "composition.current_time"
+    - "layer.list"
+    - "layer.identity"
+    - "layer.type"
+    - "layer.source_text"
+    - "layer.index"
+    - "layer.timing"
+    - "layer.transform.position"
+    - "layer.transform.scale"
+    - "layer.transform.opacity"
+    - "property.keyframes.count"
+    - "property.keyframes.time"
+    - "property.keyframes.value"
+    - "effect.list"
+    - "effect.identity.stable_id"
+    - "effect.property.identity"
+    - "effect.property.value"
+  rule: "The runner must compare each skill's required_reader_capabilities against the live manifest before execution."
 
 baseline:
   composition:
@@ -83,108 +202,206 @@ fixture_specs:
   - id: "FX-001-EMPTY-PROJECT"
     purpose: "Independent baseline for creating a composition."
     required_state:
-      project_open: true
-      composition_count: 0
+      project:
+        composition_count: 0
+      active_comp: null
+      layers: []
 
   - id: "FX-002-COMP-EMPTY"
     purpose: "Independent baseline for creating a text layer."
     required_state:
+      project:
+        composition_count: 1
       active_comp:
         name: "PILOT_COMP"
         width: 1920
         height: 1080
         duration_seconds: 5
         frame_rate: 30
-      layer_count: 0
+        current_time_seconds: 0
+        current_time_frame: 0
+      layers: []
 
   - id: "FX-003-TEXT-TO-RENAME"
     purpose: "Independent baseline for renaming an existing text layer."
     required_state:
-      active_comp: "PILOT_COMP"
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
       layers:
         - name: "TEXT_TO_RENAME"
           type: "text"
           source_text: "PILOT TEST"
+          index: 1
 
   - id: "FX-004-POSITION-READY"
     purpose: "Independent baseline for position editing."
     required_state:
-      active_comp: "PILOT_COMP"
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
       layers:
         - name: "PILOT_TEXT"
           type: "text"
           source_text: "PILOT TEST"
-          position:
-            x: 320
-            y: 240
+          index: 1
+          transform:
+            position:
+              x: 320
+              y: 240
 
   - id: "FX-005-SCALE-READY"
     purpose: "Independent baseline for scale editing."
     required_state:
-      active_comp: "PILOT_COMP"
-      layers:
-        - name: "PILOT_TEXT"
-          type: "text"
-          scale:
-            x_percent: 100
-            y_percent: 100
-
-  - id: "FX-006-OPACITY-READY"
-    purpose: "Independent baseline for opacity editing."
-    required_state:
-      active_comp: "PILOT_COMP"
-      layers:
-        - name: "PILOT_TEXT"
-          type: "text"
-          opacity_percent: 100
-          opacity_keyframe_count: 0
-
-  - id: "FX-007-OPACITY-ANIMATION-READY"
-    purpose: "Independent baseline for creating opacity keyframes."
-    required_state:
-      active_comp: "PILOT_COMP"
-      current_time_seconds: 0
-      layers:
-        - name: "PILOT_TEXT"
-          type: "text"
-          opacity_percent: 100
-          opacity_keyframe_count: 0
-
-  - id: "FX-008-DUPLICATE-READY"
-    purpose: "Independent baseline for duplicating a layer."
-    required_state:
-      active_comp: "PILOT_COMP"
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
       layers:
         - name: "PILOT_TEXT"
           type: "text"
           source_text: "PILOT TEST"
-      forbidden_state:
-        layer_name: "PILOT_TEXT_COPY"
+          index: 1
+          transform:
+            scale:
+              x_percent: 100
+              y_percent: 100
+
+  - id: "FX-006-OPACITY-READY"
+    purpose: "Independent baseline for opacity editing."
+    required_state:
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+          index: 1
+          transform:
+            opacity_percent: 100
+          properties:
+            opacity:
+              keyframe_count: 0
+              keyframes: []
+
+  - id: "FX-007-OPACITY-ANIMATION-READY"
+    purpose: "Independent baseline for creating opacity keyframes."
+    required_state:
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+          index: 1
+          transform:
+            opacity_percent: 100
+          properties:
+            opacity:
+              keyframe_count: 0
+              keyframes: []
+
+  - id: "FX-008-DUPLICATE-READY"
+    purpose: "Independent baseline for duplicating a layer."
+    required_state:
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
+      layers:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+          index: 1
 
   - id: "FX-009-REORDER-READY"
     purpose: "Independent baseline for timeline drag and reorder."
     required_state:
-      active_comp: "PILOT_COMP"
-      layer_order_top_to_bottom:
-        - "PILOT_TEXT_COPY"
-        - "PILOT_TEXT"
-      timing:
-        PILOT_TEXT:
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
+      layers:
+        - name: "PILOT_TEXT_COPY"
+          type: "text"
+          source_text: "PILOT TEST"
+          index: 1
           in_seconds: 0
           out_seconds: 5
-        PILOT_TEXT_COPY:
+        - name: "PILOT_TEXT"
+          type: "text"
+          source_text: "PILOT TEST"
+          index: 2
           in_seconds: 0
           out_seconds: 5
 
   - id: "FX-010-EFFECT-READY"
     purpose: "Independent baseline for applying an effect."
     required_state:
-      active_comp: "PILOT_COMP"
+      project:
+        composition_count: 1
+      active_comp:
+        name: "PILOT_COMP"
+        width: 1920
+        height: 1080
+        duration_seconds: 5
+        frame_rate: 30
+        current_time_seconds: 0
+        current_time_frame: 0
       layers:
         - name: "PILOT_TEXT"
           type: "text"
-      forbidden_state:
-        effect_name_contains: "Gaussian Blur"
+          source_text: "PILOT TEST"
+          index: 1
+          effects: []
 
 skills:
 
@@ -193,9 +410,13 @@ skills:
     category: "composition"
     independent: true
     fixture_id: "FX-001-EMPTY-PROJECT"
+    required_reader_capabilities:
+      - "project.composition_count"
+      - "composition.identity"
+      - "composition.dimensions"
+      - "composition.duration"
+      - "composition.frame_rate"
     goal: "Create a new composition named PILOT_COMP with the pilot baseline settings."
-    precondition_assertions:
-      - "No composition exists before measured execution."
     measured_ui_steps:
       - "Open the New Composition dialog through the After Effects UI."
       - "Enter name PILOT_COMP."
@@ -203,22 +424,16 @@ skills:
       - "Set duration to 5 seconds."
       - "Set frame rate to 30."
       - "Confirm creation."
-    expected_state:
-      active_comp:
-        name: "PILOT_COMP"
-        width: 1920
-        height: 1080
-        duration_seconds: 5
-        frame_rate: 30
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "active composition exists"
-        - "composition name equals PILOT_COMP"
-        - "width equals 1920"
-        - "height equals 1080"
-        - "duration equals 5 seconds"
-        - "frame rate equals 30"
+    assertions:
+      pre:
+        - {path: "project.composition_count", op: "eq", value: 0}
+      post:
+        - {path: "project.composition_count", op: "eq", value: 1}
+        - {path: "active_comp.name", op: "eq", value: "PILOT_COMP"}
+        - {path: "active_comp.width", op: "approx", value: 1920, tolerance: 0.01}
+        - {path: "active_comp.height", op: "approx", value: 1080, tolerance: 0.01}
+        - {path: "active_comp.duration_seconds", op: "approx", value: 5, tolerance: 0.001}
+        - {path: "active_comp.frame_rate", op: "approx", value: 30, tolerance: 0.001}
     diagnose_on_failure:
       - "new composition dialog changed"
       - "field label changed"
@@ -230,25 +445,25 @@ skills:
     category: "text"
     independent: true
     fixture_id: "FX-002-COMP-EMPTY"
+    required_reader_capabilities:
+      - "composition.identity"
+      - "layer.list"
+      - "layer.type"
+      - "layer.source_text"
     goal: "Create exactly one text layer containing PILOT TEST."
-    precondition_assertions:
-      - "PILOT_COMP exists and has zero layers."
     measured_ui_steps:
       - "Activate the text tool or the normal UI command for creating text."
       - "Create text in PILOT_COMP."
       - "Enter exactly PILOT TEST."
       - "Exit text editing so the value is committed."
-    expected_state:
-      layer_count: 1
-      layer:
-        type: "text"
-        source_text: "PILOT TEST"
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "PILOT_COMP has exactly one layer"
-        - "the layer is a text layer"
-        - "source text equals PILOT TEST"
+    assertions:
+      pre:
+        - {path: "active_comp.name", op: "eq", value: "PILOT_COMP"}
+        - {path: "layers", op: "count_eq", value: 0}
+      post:
+        - {path: "layers", op: "count_eq", value: 1}
+        - {path: "layers[0].type", op: "eq", value: "text"}
+        - {path: "layers[0].source_text", op: "eq", value: "PILOT TEST"}
     diagnose_on_failure:
       - "text tool was not activated"
       - "text editing focus was lost"
@@ -260,27 +475,23 @@ skills:
     category: "layer_management"
     independent: true
     fixture_id: "FX-003-TEXT-TO-RENAME"
+    required_reader_capabilities:
+      - "layer.list"
+      - "layer.identity"
+      - "layer.type"
+      - "layer.source_text"
     goal: "Rename TEXT_TO_RENAME to PILOT_TEXT without changing its source text."
-    precondition_assertions:
-      - "TEXT_TO_RENAME exists as a text layer with source text PILOT TEST."
-      - "PILOT_TEXT does not already exist."
     measured_ui_steps:
       - "Select TEXT_TO_RENAME in the timeline."
       - "Invoke the normal layer rename interaction."
       - "Enter PILOT_TEXT and confirm."
-    expected_state:
-      layer:
-        name: "PILOT_TEXT"
-        type: "text"
-        source_text: "PILOT TEST"
-      forbidden_layer_name: "TEXT_TO_RENAME"
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "PILOT_TEXT exists"
-        - "PILOT_TEXT remains a text layer"
-        - "source text still equals PILOT TEST"
-        - "TEXT_TO_RENAME no longer exists"
+    assertions:
+      pre:
+        - {path: "layers", op: "contains_layer", name: "TEXT_TO_RENAME", type: "text", source_text: "PILOT TEST"}
+        - {path: "layers", op: "not_contains_layer_name", value: "PILOT_TEXT"}
+      post:
+        - {path: "layers", op: "contains_layer", name: "PILOT_TEXT", type: "text", source_text: "PILOT TEST"}
+        - {path: "layers", op: "not_contains_layer_name", value: "TEXT_TO_RENAME"}
     diagnose_on_failure:
       - "timeline selection changed"
       - "rename command or label changed"
@@ -292,24 +503,21 @@ skills:
     category: "transform"
     independent: true
     fixture_id: "FX-004-POSITION-READY"
+    required_reader_capabilities:
+      - "layer.identity"
+      - "layer.transform.position"
     goal: "Set PILOT_TEXT position to X=960 and Y=540."
-    precondition_assertions:
-      - "PILOT_TEXT exists at X=320 and Y=240 before execution."
     measured_ui_steps:
       - "Select PILOT_TEXT."
       - "Reveal the Position property through normal UI/shortcut interaction."
       - "Set Position X to 960 and Y to 540."
-    expected_state:
-      layer: "PILOT_TEXT"
-      transform:
-        position:
-          x: 960
-          y: 540
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "Position X equals 960"
-        - "Position Y equals 540"
+    assertions:
+      pre:
+        - {path: "layer[name=PILOT_TEXT].transform.position.x", op: "approx", value: 320, tolerance: 0.01}
+        - {path: "layer[name=PILOT_TEXT].transform.position.y", op: "approx", value: 240, tolerance: 0.01}
+      post:
+        - {path: "layer[name=PILOT_TEXT].transform.position.x", op: "approx", value: 960, tolerance: 0.01}
+        - {path: "layer[name=PILOT_TEXT].transform.position.y", op: "approx", value: 540, tolerance: 0.01}
     diagnose_on_failure:
       - "wrong layer selected"
       - "position field layout changed"
@@ -321,24 +529,21 @@ skills:
     category: "transform"
     independent: true
     fixture_id: "FX-005-SCALE-READY"
+    required_reader_capabilities:
+      - "layer.identity"
+      - "layer.transform.scale"
     goal: "Set PILOT_TEXT uniform scale from 100 percent to 125 percent."
-    precondition_assertions:
-      - "PILOT_TEXT Scale X and Y both equal 100 before execution."
     measured_ui_steps:
       - "Select PILOT_TEXT."
       - "Reveal the Scale property."
       - "Set uniform scale to 125 percent."
-    expected_state:
-      layer: "PILOT_TEXT"
-      transform:
-        scale:
-          x_percent: 125
-          y_percent: 125
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "Scale X equals 125"
-        - "Scale Y equals 125"
+    assertions:
+      pre:
+        - {path: "layer[name=PILOT_TEXT].transform.scale.x_percent", op: "approx", value: 100, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].transform.scale.y_percent", op: "approx", value: 100, tolerance: 0.001}
+      post:
+        - {path: "layer[name=PILOT_TEXT].transform.scale.x_percent", op: "approx", value: 125, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].transform.scale.y_percent", op: "approx", value: 125, tolerance: 0.001}
     diagnose_on_failure:
       - "dimensions were unlinked"
       - "only one scale component was edited"
@@ -350,24 +555,22 @@ skills:
     category: "transform"
     independent: true
     fixture_id: "FX-006-OPACITY-READY"
+    required_reader_capabilities:
+      - "layer.identity"
+      - "layer.transform.opacity"
+      - "property.keyframes.count"
     goal: "Set PILOT_TEXT opacity from 100 percent to 40 percent without creating keyframes."
-    precondition_assertions:
-      - "PILOT_TEXT opacity equals 100."
-      - "Opacity has zero keyframes."
     measured_ui_steps:
       - "Select PILOT_TEXT."
       - "Reveal the Opacity property."
       - "Set Opacity to 40 percent."
-    expected_state:
-      layer: "PILOT_TEXT"
-      transform:
-        opacity_percent: 40
-      opacity_keyframe_count: 0
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "Opacity equals 40"
-        - "Opacity keyframe count remains 0"
+    assertions:
+      pre:
+        - {path: "layer[name=PILOT_TEXT].transform.opacity_percent", op: "approx", value: 100, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframe_count", op: "eq", value: 0}
+      post:
+        - {path: "layer[name=PILOT_TEXT].transform.opacity_percent", op: "approx", value: 40, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframe_count", op: "eq", value: 0}
     diagnose_on_failure:
       - "wrong property edited"
       - "opacity field was not active"
@@ -379,64 +582,58 @@ skills:
     category: "keyframes"
     independent: true
     fixture_id: "FX-007-OPACITY-ANIMATION-READY"
-    goal: "Create exactly two Opacity keyframes: 0 percent at 0 seconds and 100 percent at 1 second."
-    precondition_assertions:
-      - "PILOT_TEXT opacity has zero keyframes."
-      - "Current time is 0 seconds."
+    required_reader_capabilities:
+      - "composition.current_time"
+      - "layer.identity"
+      - "property.keyframes.count"
+      - "property.keyframes.time"
+      - "property.keyframes.value"
+    goal: "Create exactly two Opacity keyframes: 0 percent at frame 0 and 100 percent at frame 30."
     measured_ui_steps:
       - "Reveal Opacity for PILOT_TEXT."
-      - "At 0 seconds, enable animation and set Opacity to 0."
-      - "Move current time to exactly 1 second."
+      - "At frame 0, enable animation and set Opacity to 0."
+      - "Move current time to exactly frame 30."
       - "Set Opacity to 100, creating the second keyframe."
-    expected_state:
-      layer: "PILOT_TEXT"
-      property: "Opacity"
-      keyframe_count: 2
-      keyframes:
-        - time_seconds: 0
-          value: 0
-        - time_seconds: 1
-          value: 100
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "Opacity keyframe count equals 2"
-        - "a keyframe exists at 0 seconds with value 0"
-        - "a keyframe exists at 1 second with value 100"
-        - "no extra Opacity keyframes exist"
+    assertions:
+      pre:
+        - {path: "active_comp.current_time_frame", op: "eq", value: 0}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframe_count", op: "eq", value: 0}
+      post:
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframe_count", op: "eq", value: 2}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframes", op: "contains_keyframe", frame: 0, value: 0, value_tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframes", op: "contains_keyframe", frame: 30, value: 100, value_tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].properties.opacity.keyframes", op: "count_eq", value: 2}
     diagnose_on_failure:
       - "stopwatch was not enabled"
-      - "current-time indicator was at the wrong time"
+      - "current-time indicator was at the wrong frame"
       - "the second edit replaced a value instead of creating a keyframe"
-      - "timeline time display or frame rounding caused incorrect placement"
+      - "frame-rate or timeline rounding caused incorrect keyframe placement"
 
   - id: "AE-PILOT-008"
     title: "Duplicate a text layer"
     category: "layer_management"
     independent: true
     fixture_id: "FX-008-DUPLICATE-READY"
+    required_reader_capabilities:
+      - "layer.list"
+      - "layer.identity"
+      - "layer.type"
+      - "layer.source_text"
     goal: "Duplicate PILOT_TEXT once and rename only the duplicate to PILOT_TEXT_COPY."
-    precondition_assertions:
-      - "Exactly one PILOT_TEXT layer exists."
-      - "PILOT_TEXT_COPY does not exist."
     measured_ui_steps:
       - "Select PILOT_TEXT."
       - "Duplicate the selected layer using a normal UI or keyboard interaction."
       - "Rename the new duplicate to PILOT_TEXT_COPY."
-    expected_state:
-      required_layers:
-        - name: "PILOT_TEXT"
-          type: "text"
-        - name: "PILOT_TEXT_COPY"
-          type: "text"
-      matching_layer_count: 2
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "PILOT_TEXT exists exactly once"
-        - "PILOT_TEXT_COPY exists exactly once"
-        - "both are text layers"
-        - "total matching layers equals 2"
+    assertions:
+      pre:
+        - {path: "layers", op: "count_layer_name", name: "PILOT_TEXT", value: 1}
+        - {path: "layers", op: "count_layer_name", name: "PILOT_TEXT_COPY", value: 0}
+      post:
+        - {path: "layers", op: "count_layer_name", name: "PILOT_TEXT", value: 1}
+        - {path: "layers", op: "count_layer_name", name: "PILOT_TEXT_COPY", value: 1}
+        - {path: "layers", op: "contains_layer", name: "PILOT_TEXT", type: "text", source_text: "PILOT TEST"}
+        - {path: "layers", op: "contains_layer", name: "PILOT_TEXT_COPY", type: "text", source_text: "PILOT TEST"}
+        - {path: "layers", op: "count_eq", value: 2}
     diagnose_on_failure:
       - "wrong layer duplicated"
       - "duplicate command changed"
@@ -448,31 +645,31 @@ skills:
     category: "timeline_drag"
     independent: true
     fixture_id: "FX-009-REORDER-READY"
+    required_reader_capabilities:
+      - "layer.list"
+      - "layer.identity"
+      - "layer.index"
+      - "layer.timing"
     goal: "Move PILOT_TEXT_COPY from directly above PILOT_TEXT to directly below it using a drag interaction, without shifting either layer in time."
-    precondition_assertions:
-      - "Top-to-bottom order is PILOT_TEXT_COPY, then PILOT_TEXT."
-      - "Both layers have in=0 seconds and out=5 seconds."
     measured_ui_steps:
       - "Locate PILOT_TEXT_COPY in the timeline."
       - "Drag the layer row below PILOT_TEXT."
       - "Release only when the insertion indicator shows a reorder, not a time shift."
-    expected_state:
-      layer_order_top_to_bottom:
-        - "PILOT_TEXT"
-        - "PILOT_TEXT_COPY"
-      timing:
-        PILOT_TEXT:
-          in_seconds: 0
-          out_seconds: 5
-        PILOT_TEXT_COPY:
-          in_seconds: 0
-          out_seconds: 5
-    verification:
-      primary: "AE_READER"
-      required_checks:
-        - "PILOT_TEXT is directly above PILOT_TEXT_COPY"
-        - "PILOT_TEXT timing remains 0 to 5 seconds"
-        - "PILOT_TEXT_COPY timing remains 0 to 5 seconds"
+    assertions:
+      pre:
+        - {path: "layer[name=PILOT_TEXT_COPY].index", op: "eq", value: 1}
+        - {path: "layer[name=PILOT_TEXT].index", op: "eq", value: 2}
+        - {path: "layer[name=PILOT_TEXT_COPY].in_seconds", op: "approx", value: 0, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT_COPY].out_seconds", op: "approx", value: 5, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].in_seconds", op: "approx", value: 0, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].out_seconds", op: "approx", value: 5, tolerance: 0.001}
+      post:
+        - {path: "layer[name=PILOT_TEXT].index", op: "eq", value: 1}
+        - {path: "layer[name=PILOT_TEXT_COPY].index", op: "eq", value: 2}
+        - {path: "layer[name=PILOT_TEXT_COPY].in_seconds", op: "approx", value: 0, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT_COPY].out_seconds", op: "approx", value: 5, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].in_seconds", op: "approx", value: 0, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].out_seconds", op: "approx", value: 5, tolerance: 0.001}
     diagnose_on_failure:
       - "drag target shifted because of timeline layout"
       - "layer was moved in time instead of reordered"
@@ -484,76 +681,127 @@ skills:
     category: "effect"
     independent: true
     fixture_id: "FX-010-EFFECT-READY"
-    goal: "Apply the Gaussian Blur effect to PILOT_TEXT through the UI and set its Blurriness value to 25."
-    precondition_assertions:
-      - "PILOT_TEXT exists."
-      - "No effect whose display name contains Gaussian Blur is already applied to PILOT_TEXT."
+    enabled_when:
+      - "AE Reader manifest includes effect.list"
+      - "AE Reader manifest includes effect.property.value"
+      - "A stable effect identity for the installed Gaussian Blur variant has been resolved and stored in runtime calibration."
+    required_reader_capabilities:
+      - "effect.list"
+      - "effect.property.value"
+    preferred_reader_capabilities:
+      - "effect.identity.stable_id"
+      - "effect.property.identity"
+    runtime_calibration:
+      stable_effect_id: null
+      rule: "Do not hard-code an unverified internal effect identifier. Resolve it from the installed AE build before enabling this skill."
+    goal: "Apply the installed Gaussian Blur effect variant to PILOT_TEXT through the UI and set its Blurriness value to 25."
     measured_ui_steps:
       - "Select PILOT_TEXT."
-      - "Locate and apply Gaussian Blur through the After Effects UI."
+      - "Locate and apply the Gaussian Blur effect through the After Effects UI."
       - "Set the Blurriness value to 25."
-    expected_state:
-      layer: "PILOT_TEXT"
-      effect:
-        display_name_contains: "Gaussian Blur"
-        property:
-          display_name: "Blurriness"
-          value: 25
-    verification:
-      primary: "AE_READER"
-      fallback:
-        - "WINDOWS_UI_AUTOMATION"
-        - "VISION"
-      required_checks:
-        - "an applied effect identifiable as Gaussian Blur is present on PILOT_TEXT"
-        - "its Blurriness value equals 25"
+    assertions:
+      pre:
+        - {path: "layer[name=PILOT_TEXT].effects", op: "count_eq", value: 0}
+      post:
+        - {path: "layer[name=PILOT_TEXT].effects", op: "contains_effect_runtime_id", runtime_key: "stable_effect_id"}
+        - {path: "layer[name=PILOT_TEXT].effects[runtime_id=stable_effect_id].property[display_name=Blurriness].value", op: "approx", value: 25, tolerance: 0.001}
     diagnose_on_failure:
       - "effect display name changed"
       - "effect search or menu path changed"
       - "wrong layer selected before applying the effect"
       - "effect parameter label changed"
-      - "AE Reader does not expose enough effect identity/property information"
+      - "AE Reader does not expose enough effect identity or property information"
+
+assertion_operator_contract:
+  supported:
+    - "eq"
+    - "approx"
+    - "count_eq"
+    - "contains_layer"
+    - "not_contains_layer_name"
+    - "count_layer_name"
+    - "contains_keyframe"
+    - "contains_effect_runtime_id"
+  rule: "The verifier must reject unknown assertion operators instead of silently ignoring them."
 
 run_protocol:
   before_each_run:
-    - "Generate a unique run_id."
-    - "Restore a fresh copy of the skill fixture."
+    - "Generate a unique run_id and reader_request_id."
+    - "Restore a fresh copy of the selected skill fixture."
     - "Open the fixture in After Effects."
-    - "Record exact After Effects build, language, workspace, display resolution, and scaling."
-    - "Read the pre-state with AE Reader."
-    - "Assert every precondition. If any precondition fails, mark BLOCKED and do not execute the skill."
+    - "Check the locked pilot environment contract."
+    - "Fetch the live AE Reader capability manifest."
+    - "Compare required_reader_capabilities against the manifest."
+    - "Read a fresh pre-state with AE Reader."
+    - "Evaluate every machine-readable pre assertion."
+    - "If any environment, capability, freshness, or precondition check fails, assign run_status BLOCKED and do not execute the skill."
   during_each_run:
     - "Measure only the skill's declared UI steps."
     - "Record every UFO action and action result."
-    - "Capture evidence when the state diverges or execution becomes blocked."
+    - "Record the timestamp of the last measured UFO action."
+    - "Capture evidence immediately when the state diverges or execution becomes blocked."
   after_each_run:
-    - "Read a fresh post-state with AE Reader."
-    - "Compare the post-state against required checks."
-    - "Assign exactly one final status."
+    - "Read a fresh post-state with a new reader_request_id."
+    - "Verify that the post-state timestamp is newer than the last measured UFO action."
+    - "Evaluate every machine-readable post assertion."
+    - "Assign exactly one run_status."
     - "Do not repair the fixture and continue the same measured run."
-    - "Close/discard the disposable fixture copy."
+    - "Close and discard the disposable fixture copy."
   repetition_rule:
     runs_per_skill: 3
     each_run_starts_from_fresh_fixture: true
-    verified_requires_all_runs_pass: true
+    skill_verified_requires: "PASS,PASS,PASS"
 
 status_contract:
-  VERIFIED:
-    condition: "All required checks pass in all 3 independent runs with fresh evidence and no conflicting evidence."
+  PASS:
+    scope: "run"
+    condition: "All preconditions were valid, measured execution completed, all required post assertions pass, and evidence freshness is valid."
   UI_CHANGED:
-    condition: "Execution cannot follow the stored UI path/label/layout, but evidence shows the intended capability still exists through a changed UI route."
+    scope: "run"
+    condition: "The stored UI route, label, or layout could not be followed, while independent evidence supports that the intended capability still exists through a changed UI route."
   EXECUTION_FAILED:
-    condition: "The agent could not complete the declared UI interaction sequence."
+    scope: "run"
+    condition: "The agent could not complete the declared measured UI interaction sequence."
   VERIFICATION_FAILED:
-    condition: "The agent completed execution, but AE Reader proves the resulting application state is not the expected state."
+    scope: "run"
+    condition: "Measured execution completed, but fresh AE Reader state disproves one or more required post assertions."
   BLOCKED:
-    condition: "The environment, fixture, permissions, crash, unknown modal dialog, or wrong application prevents a valid measured run."
+    scope: "run"
+    condition: "The environment, capability manifest, fixture, permissions, crash, unknown modal dialog, wrong application, or locked pilot settings prevent a valid measured run."
   INCONCLUSIVE:
-    condition: "Evidence is insufficient, stale, malformed, or contradictory; success must not be inferred."
+    scope: "run"
+    condition: "Post-execution evidence is missing, stale, malformed, unsupported, or contradictory."
+  VERIFIED:
+    scope: "skill"
+    condition: "All 3 required independent runs have run_status PASS."
+  NOT_VERIFIED:
+    scope: "skill"
+    condition: "At least one completed run has EXECUTION_FAILED or VERIFICATION_FAILED and there is no unresolved evidence ambiguity."
+  NEEDS_REVIEW:
+    scope: "skill"
+    condition: "At least one run is UI_CHANGED, BLOCKED, or INCONCLUSIVE, or run outcomes are mixed in a way that prevents a definitive aggregate judgment."
+
+verifier_calibration:
+  required_before_pilot: true
+  controls:
+    - id: "CAL-POSITIVE"
+      purpose: "Prove the verifier can accept a known-correct state."
+      method: "Read a canonical fixture and evaluate assertions that are known to match that exact fixture."
+      expected_result: "PASS"
+    - id: "CAL-NEGATIVE"
+      purpose: "Prove the verifier rejects a deliberately false expectation and cannot false-pass."
+      method: "Read the same canonical fixture but inject a deliberately incorrect expected value into a calibration-only assertion without modifying After Effects."
+      expected_result: "VERIFICATION_FAILED"
+    - id: "CAL-STALE"
+      purpose: "Prove stale evidence cannot pass."
+      method: "Replay a previous reader response with a mismatched run_id or reader_request_id."
+      expected_result: "INCONCLUSIVE"
+  gate: "Do not begin the 30 pilot runs unless all calibration controls return their expected results."
 
 diagnostic_evidence:
-  required_on_non_verified_run:
+  required_on_non_pass_run:
     - "run_id"
+    - "reader_request_id"
     - "skill_id"
     - "fixture_id"
     - "failure_boundary"
@@ -561,12 +809,14 @@ diagnostic_evidence:
     - "next_intended_step"
     - "ufo_action_log"
     - "ufo_action_results"
+    - "ae_reader_manifest"
     - "ae_reader_pre_state"
     - "ae_reader_post_state_or_error"
     - "application_screenshot_before"
     - "application_screenshot_at_failure"
     - "visible_ui_controls_at_failure"
     - "ae_version_and_build"
+    - "ae_language"
     - "workspace"
     - "display_resolution_and_scaling"
   optional_analysis_fields:
@@ -574,54 +824,72 @@ diagnostic_evidence:
     - "suspected_ui_change"
     - "proposed_fix"
     - "confidence"
-  rule: "Diagnostic model output is analysis only; it cannot change the final status or source specification without a re-test."
+  rule: "Diagnostic model output is analysis only; it cannot change run_status, skill_status, or the source specification without a fresh re-test."
 
 correction_workflow:
   source_spec_is_immutable_during_test: true
   stages:
-    - "Detect a failure or UI change."
+    - "Detect a non-PASS run."
     - "Create a PROPOSED_FIX record outside the source skill."
-    - "State the old assumption, proposed new route/value, evidence, and reason."
-    - "Run the proposed fix from the same fresh fixture three independent times."
-    - "Only after repeatable success may the fix be marked CONFIRMED_FIX."
-    - "Promotion into the source knowledge base is a separate review step."
+    - "State the old assumption, proposed new route or value, evidence, and reason."
+    - "Run the proposed fix from the same canonical fresh fixture three independent times."
+    - "Only after three PASS results may the fix be marked CONFIRMED_FIX."
+    - "Promotion into any source knowledge base is a separate reviewed step."
 
 report_schema:
   per_run:
-    - "run_id"
-    - "skill_id"
-    - "fixture_id"
-    - "run_number"
-    - "status"
-    - "started_at"
-    - "finished_at"
-    - "ae_version"
-    - "ae_build"
-    - "ae_language"
-    - "workspace"
-    - "display_resolution"
-    - "display_scaling"
-    - "precondition_result"
-    - "pre_state"
-    - "actions_attempted"
-    - "action_results"
-    - "post_state"
-    - "verification_evidence"
-    - "failure_boundary"
-    - "failure_reason"
-    - "suspected_ui_change"
-    - "proposed_fix"
-    - "screenshot_refs"
-  final_skill_decision:
-    verified_when: "3 of 3 independent runs are VERIFIED."
-    otherwise: "Do not collapse mixed outcomes into VERIFIED. Preserve the run-level statuses and require review or re-test."
+    required_fields:
+      - "run_id"
+      - "reader_request_id"
+      - "skill_id"
+      - "fixture_id"
+      - "run_number"
+      - "run_status"
+      - "started_at"
+      - "finished_at"
+      - "ae_version"
+      - "ae_build"
+      - "ae_language"
+      - "workspace"
+      - "display_resolution"
+      - "display_scaling"
+      - "reader_version"
+      - "reader_schema_version"
+      - "reader_capability_manifest"
+      - "pre_assertion_results"
+      - "pre_state"
+      - "actions_attempted"
+      - "action_results"
+      - "post_assertion_results"
+      - "post_state"
+      - "verification_evidence"
+      - "failure_boundary"
+      - "failure_reason"
+      - "suspected_ui_change"
+      - "proposed_fix"
+      - "screenshot_refs"
+  per_skill:
+    required_fields:
+      - "skill_id"
+      - "run_statuses"
+      - "skill_status"
+      - "verified_run_count"
+      - "review_reason"
+    verified_when: "run_statuses are exactly PASS, PASS, PASS."
 
 pilot_acceptance_criteria:
+  preconditions:
+    - "Verifier calibration CAL-POSITIVE passes."
+    - "Verifier calibration CAL-NEGATIVE returns VERIFICATION_FAILED."
+    - "Verifier calibration CAL-STALE returns INCONCLUSIVE."
+    - "All ten skills have satisfiable required_reader_capabilities, except a skill explicitly gated as disabled pending runtime calibration."
+    - "All fixture specifications have materialized .aep files proven to match their required_state."
   system_passes_pilot_when:
-    - "All 30 planned runs produce a valid, auditable status."
-    - "No run is marked VERIFIED without required AE Reader evidence."
+    - "Every attempted pilot run produces exactly one auditable run_status."
+    - "No run receives PASS without fresh AE Reader evidence and all required post assertions passing."
     - "No contaminated fixture is reused as a fresh run."
     - "The runner distinguishes execution failure from verification failure."
-    - "The runner can stop safely on BLOCKED or unknown UI state."
-    - "Failure evidence is sufficient to reproduce or diagnose the boundary."
-  note: "The pilot does not require all ten skills to be correct. It requires the verification system to classify outcomes truthfully and reproducibly."
+    - "The runner stops safely on BLOCKED, unsupported capability, environment mismatch, or unknown UI state."
+    - "Failure evidence is sufficient to reproduce or diagnose the failure boundary."
+    - "The negative and stale-evidence calibration controls never false-pass."
+  note: "The pilot does not require all ten skills to succeed. It requires the verification system to classify outcomes truthfully, reproducibly, and without false PASS results."
