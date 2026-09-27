@@ -24,14 +24,19 @@ class UFOPlan:
     def to_dict(self) -> Dict[str, Any]:
         return copy.deepcopy(self.payload)
 
-    def sha256(self) -> str:
-        encoded = json.dumps(
-            self.payload,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
+    def serialized_bytes(self) -> bytes:
+        return (
+            json.dumps(
+                self.payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n"
         ).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()
+
+    def sha256(self) -> str:
+        return hashlib.sha256(self.serialized_bytes()).hexdigest()
 
 
 def compile_skill_plan(contract: PilotContract, skill_id: str) -> UFOPlan:
