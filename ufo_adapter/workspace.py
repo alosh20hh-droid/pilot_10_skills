@@ -31,7 +31,7 @@ class UFOWorkspace:
             "worktree_root": self.worktree_root,
             "commit": self.commit,
             "overlay_path": self.overlay_path,
-            "ufo_env": "pilot",
+            "ufo_env": "test",
             "max_round": self.max_round,
             "max_step": self.max_step,
         }
@@ -140,10 +140,10 @@ class UFOWorkspaceManager:
                 raise UFOWorkspaceError(
                     "isolated UFO worktree is missing config/ufo"
                 )
-            overlay_path = config_dir / "system_pilot.yaml"
+            overlay_path = config_dir / "system_test.yaml"
             if overlay_path.exists():
                 raise UFOWorkspaceError(
-                    "pinned UFO revision unexpectedly already contains system_pilot.yaml"
+                    "pinned UFO revision unexpectedly already contains system_test.yaml"
                 )
             overlay_path.write_text(
                 yaml.safe_dump(
