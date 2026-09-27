@@ -224,6 +224,12 @@ def validate_evidence(
     errors = evidence.get("errors")
     if not isinstance(errors, list):
         return EvidenceValidation(False, "MALFORMED_EVIDENCE", "reader errors must be a list")
+    if not all(isinstance(item, str) for item in errors):
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "reader errors must contain strings only",
+        )
 
     capabilities = evidence.get("capabilities")
     if not isinstance(capabilities, dict):
@@ -604,7 +610,7 @@ class DeterministicVerifier:
                 blocked_reason,
             )
 
-        if isinstance(ui_change_evidence, dict):
+        if isinstance(ui_change_evidence, dict) and not execution_completed:
             route_changed = ui_change_evidence.get("route_changed") is True
             capability_exists = ui_change_evidence.get("capability_still_exists") is True
             if route_changed and capability_exists:
@@ -656,6 +662,46 @@ class DeterministicVerifier:
                 evidence_check.error_code or "INVALID_POST_EVIDENCE",
                 evidence_check.reason or "post-execution evidence is invalid",
                 details=evidence_check.details,
+            )
+
+        post_supported = set(
+            evidence_check.details.get("supported_capabilities") or []
+        )
+        if "project.file_identity" not in post_supported:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "READER_CAPABILITY_MISSING",
+                "post-state AE Reader evidence lacks project.file_identity",
+                details={"missing_capabilities": ["project.file_identity"]},
+            )
+
+        expected_fixture_path = preflight.details.get("expected_fixture_path")
+        if not isinstance(expected_fixture_path, str) or not expected_fixture_path:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "FIXTURE_IDENTITY_REQUIRED",
+                "preflight did not preserve the expected disposable fixture path",
+            )
+
+        post_project_state = (evidence_check.state or {}).get("project")
+        post_fixture_path = (
+            post_project_state.get("file_path")
+            if isinstance(post_project_state, dict)
+            else None
+        )
+        if (
+            not isinstance(post_fixture_path, str)
+            or not post_fixture_path
+            or not _same_windows_path(post_fixture_path, expected_fixture_path)
+        ):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "POST_FIXTURE_IDENTITY_MISMATCH",
+                "post-state belongs to a different or unidentified project file",
+                details={
+                    "expected_fixture_path": expected_fixture_path,
+                    "observed_fixture_path": post_fixture_path,
+                },
             )
 
         assertion_results = evaluate_assertions(
