@@ -232,6 +232,7 @@ class SchemaTests(unittest.TestCase):
         duplicate["layer_id"] = 502
         data["layers"].append(duplicate)
         data["composition"]["num_layers"] = 2
+        data["composition"]["selected_layers_count"] = 2
 
         snapshot = AEStateSnapshot.from_dict(data)
         self.assertIsNone(snapshot.find_layer("PILOT_TEXT"))
