@@ -161,7 +161,10 @@ class UFOMeasuredRunner:
             raise UFOExecutionError(
                 "disposable fixture hash does not match the certified run-copy hash"
             )
-        return plan.bind_object(str(path)), path
+        # The fixture must already be open before the measured UFO run.
+        # Keep the Follower plan object bound to AfterFX.exe so opening the
+        # fixture itself is not accidentally counted as a measured UFO action.
+        return plan, path
 
     def prepare_run(
         self,
