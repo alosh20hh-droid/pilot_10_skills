@@ -1,5 +1,8 @@
 import copy
+import tempfile
 import unittest
+
+import yaml
 from pathlib import Path
 
 from verifier import (
@@ -10,6 +13,7 @@ from verifier import (
     run_calibration,
     run_pilot_calibration,
 )
+from verifier.contract import ContractError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -124,6 +128,60 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(len(c.fixtures), 10)
         self.assertEqual(c.required_repetitions, 3)
         self.assertEqual(c.validate(), [])
+
+
+
+    def _load_modified(self, mutate):
+        raw = copy.deepcopy(contract().raw)
+        mutate(raw)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "pilot.yaml"
+            path.write_text(
+                yaml.safe_dump(raw, sort_keys=False),
+                encoding="utf-8",
+            )
+            return PilotContract.load(path)
+
+    def test_contract_rejects_missing_baseline_skill(self):
+        with self.assertRaises(ContractError):
+            self._load_modified(lambda raw: raw["skills"].pop())
+
+    def test_contract_rejects_wrong_repetition_count(self):
+        with self.assertRaises(ContractError):
+            self._load_modified(
+                lambda raw: raw["pilot"].__setitem__(
+                    "required_repetitions_per_skill", 2
+                )
+            )
+
+    def test_contract_rejects_unlocked_environment(self):
+        with self.assertRaises(ContractError):
+            self._load_modified(
+                lambda raw: raw["environment_contract"]["display"].__setitem__(
+                    "required_scaling_percent", 125
+                )
+            )
+
+    def test_contract_rejects_negative_tolerance(self):
+        with self.assertRaises(ContractError):
+            self._load_modified(
+                lambda raw: raw["comparison_policy"].__setitem__(
+                    "default_numeric_absolute_tolerance", -0.1
+                )
+            )
+
+    def test_effect_assertion_requires_effect_identity_capabilities(self):
+        def mutate(raw):
+            skill = next(
+                item for item in raw["skills"] if item["id"] == "AE-PILOT-010"
+            )
+            skill["required_reader_capabilities"] = [
+                "effect.list",
+                "effect.property.value",
+            ]
+
+        with self.assertRaises(ContractError):
+            self._load_modified(mutate)
 
 
 class PathResolverTests(unittest.TestCase):
@@ -496,6 +554,109 @@ class PostVerificationTests(unittest.TestCase):
         )
         self.assertEqual(decision.run_status, "PASS")
 
+
+
+    def test_post_skill_must_match_preflight_skill(self):
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-005",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                fixture_state("AE-PILOT-005"),
+                request_id="post-1",
+                captured_at=40,
+            ),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "PREFLIGHT_SKILL_MISMATCH")
+
+    def test_post_run_must_match_preflight_run(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                run_id="run-2",
+                request_id="post-1",
+                captured_at=40,
+            ),
+            expected_run_id="run-2",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "PREFLIGHT_RUN_MISMATCH")
+
+    def test_last_action_must_be_after_pre_state_capture(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(state, request_id="post-1", captured_at=40),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=20,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "ACTION_TIMESTAMP_ORDER_INVALID")
+
+    def test_post_cannot_change_runtime_calibration_from_preflight(self):
+        preflight = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-010",
+            evidence=evidence_for(
+                fixture_state("AE-PILOT-010"),
+                request_id="pre-10",
+                captured_at=20,
+            ),
+            expected_run_id="run-10",
+            expected_request_id="pre-10",
+            run_started_at=10,
+            environment=good_environment(),
+            runtime={"stable_effect_id": "ADBE Gaussian Blur 2"},
+            expected_ae_build="26.0-test",
+        )
+        self.assertTrue(preflight.can_execute)
+
+        state = fixture_state("AE-PILOT-010")
+        state["layers"][0]["effects"] = [
+            {
+                "display_name": "Gaussian Blur",
+                "stable_id": "OTHER_EFFECT",
+                "enabled": True,
+                "properties": [
+                    {
+                        "display_name": "Blurriness",
+                        "stable_id": "OTHER_PROP",
+                        "value": 25,
+                    }
+                ],
+            }
+        ]
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-010",
+            preflight=preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                run_id="run-10",
+                request_id="post-10",
+                captured_at=40,
+            ),
+            expected_run_id="run-10",
+            expected_request_id="post-10",
+            last_action_at=30,
+            runtime={"stable_effect_id": "OTHER_EFFECT"},
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_CHANGED")
 
     def test_missing_post_request_id_is_inconclusive(self):
         state = fixture_state("AE-PILOT-004")
