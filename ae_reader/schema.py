@@ -527,6 +527,7 @@ class AECompositionSnapshot:
 class AEProjectSnapshot:
     item_count: int
     composition_count: int
+    file_path: Optional[str] = None
 
     @classmethod
     def from_dict(cls, value: Any) -> "AEProjectSnapshot":
@@ -539,10 +540,17 @@ class AEProjectSnapshot:
             or not isinstance(composition_count, int) or isinstance(composition_count, bool) or composition_count < 0
         ):
             raise ValueError("invalid project counts")
-        return cls(item_count, composition_count)
+        file_path = value.get("file_path")
+        if file_path is not None and not isinstance(file_path, str):
+            raise ValueError("invalid project file path")
+        return cls(item_count, composition_count, file_path)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"item_count": self.item_count, "composition_count": self.composition_count}
+        return {
+            "item_count": self.item_count,
+            "composition_count": self.composition_count,
+            "file_path": self.file_path,
+        }
 
 
 @dataclass(frozen=True)
@@ -652,7 +660,7 @@ def invalid_state(
         captured_at=None,
         application={"name": "After Effects"},
         capabilities=manifest,
-        project=AEProjectSnapshot(0, 0),
+        project=AEProjectSnapshot(0, 0, None),
         composition=AECompositionSnapshot.unavailable(),
         layers=[],
         errors=[error],
