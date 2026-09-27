@@ -215,12 +215,18 @@ def validate_evidence(
             },
         )
 
+    errors = evidence.get("errors")
+    if not isinstance(errors, list):
+        return EvidenceValidation(False, "MALFORMED_EVIDENCE", "reader errors must be a list")
+
     capabilities = evidence.get("capabilities")
     if not isinstance(capabilities, dict):
         return EvidenceValidation(False, "MALFORMED_EVIDENCE", "capability manifest is missing")
     supported = capabilities.get("supported_capabilities")
     if not isinstance(supported, list) or not all(isinstance(item, str) for item in supported):
         return EvidenceValidation(False, "MALFORMED_EVIDENCE", "invalid supported_capabilities")
+    if len(set(supported)) != len(supported):
+        return EvidenceValidation(False, "MALFORMED_EVIDENCE", "duplicate supported_capabilities")
 
     if expected_reader_version is not None and capabilities.get("reader_version") != expected_reader_version:
         return EvidenceValidation(False, "READER_VERSION_MISMATCH", "capability manifest reader version mismatch")
