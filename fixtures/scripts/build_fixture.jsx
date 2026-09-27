@@ -217,9 +217,22 @@ function buildFromRequiredState(requiredState) {
             request.lab_mode === "DISPOSABLE_FIXTURE_BUILD",
             "Refusing to mutate project outside disposable fixture-build mode"
         );
-        requireValue(typeof request.fixture_id === "string", "fixture_id is required");
-        requireValue(typeof request.output_path === "string", "output_path is required");
-        requireValue(request.required_state !== null, "required_state is required");
+        requireValue(
+            typeof request.fixture_id === "string" && request.fixture_id.length > 0,
+            "fixture_id is required"
+        );
+        requireValue(
+            typeof request.output_path === "string" && request.output_path.length > 4,
+            "output_path is required"
+        );
+        requireValue(
+            request.output_path.toLowerCase().substr(request.output_path.length - 4) === ".aep",
+            "fixture output must use .aep extension"
+        );
+        requireValue(
+            request.required_state !== null && request.required_state !== undefined,
+            "required_state is required"
+        );
 
         result.fixture_id = String(request.fixture_id);
         result.output_path = String(request.output_path);
