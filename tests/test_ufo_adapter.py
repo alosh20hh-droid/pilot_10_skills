@@ -113,6 +113,8 @@ class UFOLockTests(unittest.TestCase):
         self.assertIn("ufo/module/basic.py", lock["required_files"])
         self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_APIS"])
         self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_MCP"])
+        self.assertEqual(lock["execution_overlay"]["environment"], "test")
+        self.assertEqual(lock["execution_overlay"]["file"], "config/ufo/system_test.yaml")
 
     def test_audited_controller_capabilities_are_declared(self):
         lock = load_upstream_lock()
@@ -155,7 +157,7 @@ class UFOWorkspaceTests(unittest.TestCase):
                 overlay_path = Path(workspace.overlay_path)
                 self.assertTrue(overlay_path.is_file())
                 self.assertFalse(
-                    (root / "config" / "ufo" / "system_pilot.yaml").exists()
+                    (root / "config" / "ufo" / "system_test.yaml").exists()
                 )
                 import yaml
                 overlay = yaml.safe_load(overlay_path.read_text(encoding="utf-8"))
