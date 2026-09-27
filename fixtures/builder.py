@@ -151,6 +151,15 @@ class FixtureBuilder:
                         raise FixtureBuildError(
                             f"fixture build failed: {result.get('error') or result.get('status')}"
                         )
+                    returned_output = result.get("output_path")
+                    if not isinstance(returned_output, str) or not returned_output:
+                        raise FixtureBuildError("fixture build result is missing output_path")
+                    expected_output = os.path.normcase(os.path.abspath(str(output)))
+                    observed_output = os.path.normcase(os.path.abspath(returned_output))
+                    if observed_output != expected_output:
+                        raise FixtureBuildError(
+                            "fixture build result belongs to a different output file"
+                        )
                     if not output.is_file():
                         raise FixtureBuildError(
                             "After Effects reported SAVED but the .aep file is missing"
