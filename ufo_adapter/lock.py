@@ -30,6 +30,7 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
         "audited_sources",
         "required_files",
         "execution_overlay",
+        "execution_route_policy",
     }
     missing = sorted(required - set(value))
     if missing:
@@ -98,6 +99,38 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
     minimum_step_budget = overlay.get("minimum_step_budget")
     if not isinstance(minimum_step_budget, int) or minimum_step_budget < 1:
         raise UFOLockError("execution_overlay.minimum_step_budget must be positive")
+
+    route_policy = value.get("execution_route_policy")
+    if not isinstance(route_policy, dict):
+        raise UFOLockError("execution_route_policy must be an object")
+    if route_policy.get("config_file") != "config/ufo/mcp.yaml":
+        raise UFOLockError("UFO execution route policy must bind config/ufo/mcp.yaml")
+
+    if route_policy.get("allowed_agents") != ["HostAgent", "AppAgent"]:
+        raise UFOLockError("unexpected UFO allowed agent set")
+    if route_policy.get("allowed_data_collection_namespaces") != ["UICollector"]:
+        raise UFOLockError("only UICollector may collect measured UFO UI state")
+    if route_policy.get("allowed_action_namespaces") != [
+        "HostUIExecutor",
+        "AppUIExecutor",
+    ]:
+        raise UFOLockError("measured UFO action namespaces must be UI-only")
+
+    forbidden = route_policy.get("forbidden_namespaces")
+    if not isinstance(forbidden, list) or not all(
+        isinstance(item, str) and item for item in forbidden
+    ):
+        raise UFOLockError("execution_route_policy.forbidden_namespaces is invalid")
+    required_forbidden = {
+        "CommandLineExecutor",
+        "WordCOMExecutor",
+        "ExcelCOMExecutor",
+        "PowerPointCOMExecutor",
+        "HardwareExecutor",
+        "BashExecutor",
+    }
+    if not required_forbidden.issubset(set(forbidden)):
+        raise UFOLockError("UFO route policy omits a prohibited execution namespace")
 
     return value
 
