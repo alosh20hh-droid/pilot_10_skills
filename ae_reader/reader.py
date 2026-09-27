@@ -284,6 +284,7 @@ class AfterEffectsReadOnlyObserver:
             "reader_version": snapshot.reader_version,
             "schema_version": snapshot.schema_version,
             "capabilities": snapshot.capabilities.to_dict(),
+            "application": dict(snapshot.application),
             "state": snapshot.to_pilot_state(),
             "errors": list(snapshot.errors),
         }
