@@ -1,169 +1,239 @@
-# UFO Step 04 Adapter
+# Step 04 — Microsoft UFO² execution adapter
 
-This package integrates a pinned Microsoft UFO checkout with the AE 10-skill pilot.
+This package connects the **existing** Microsoft UFO checkout to the AE 10-skill verification pilot.
 
-## Design
+UFO is the execution body only. It does not define success, it does not prepare canonical fixtures, and its own FINISH/evaluation output is never accepted as PASS.
 
-The adapter treats UFO as the execution body only.
+\`\`\`text
+certified Step 03 run copy
+        ↓
+Verifier preflight (later orchestrator)
+        ↓
+pilot skill measured_ui_steps
+        ↓
+UFO Follower Mode plan
+        ↓
+isolated detached UFO worktree
+        ↓
+UIA-only pilot overlay
+        ↓
+UFO AppAgent + controller
+        ↓
+visible After Effects UI
+        ↓
+fresh AE Reader post-state
+        ↓
+deterministic Verifier
+\`\`\`
 
-It does not define success, does not modify fixture specifications, and does not replace AE Reader or the deterministic verifier.
+## Existing UFO checkout
 
-```text
-pilot skill
-  -> compile exact measured_ui_steps
-  -> Follower Mode plan
-  -> locked UFO checkout
-  -> UFO AppAgent + UI controller
-  -> After Effects UI
-```
+Step 04 does **not** clone or modify the user's working UFO folder.
 
-Success is still decided later by AE Reader + Verifier.
+The adapter expects an existing checkout, for example:
+
+\`\`\`text
+C:\Users\AL-BASHA\UFO
+\`\`\`
+
+Measured execution validates that checkout against the pinned upstream source and then creates a temporary detached Git worktree for the actual run.
+
+The original checkout remains clean.
 
 ## Pinned upstream
 
-The adapter is pinned to:
-
-```text
+\`\`\`text
 repository: microsoft/UFO
 commit: e2a03126241c696fdaf9a669a271ca3fca6d9916
-```
+mode: follower
+\`\`\`
 
-The audited files are recorded in `upstream_lock.json`.
+\`upstream_lock.json\` contains exact blob hashes for the audited upstream files.
 
-The local checkout must:
+Measured execution refuses:
 
-- have exactly the locked HEAD commit,
-- have a clean Git worktree,
-- contain every audited source file,
-- run on Windows.
+- the wrong UFO commit,
+- a dirty checkout,
+- missing audited source files,
+- changed audited file blobs.
 
-Otherwise measured execution is refused.
+The lock covers Follower Mode, plan parsing, session limits, UI controller actions, system configuration, and environment-specific configuration overlay behavior.
 
-## Mode
+## Why Follower Mode
 
-Only UFO `follower` mode is authorized.
+The pinned upstream implementation accepts a JSON plan containing:
 
-The generated command is:
-
-```text
-python -m ufo --task <task> --mode follower --plan <plan.json> --log-level INFO
-```
-
-The adapter never emits `batch_normal`, `operator`, or `normal_operator` for measured AE execution.
-
-This matches the audited upstream implementation where `SessionFactory` creates `FollowerSession`, which consumes the plan through `PlanReader`.
-
-## Plan compilation
-
-Each pilot skill is compiled directly from:
-
-- `goal`
-- `measured_ui_steps`
-- `fixture_id`
-
-The plan schema is:
-
-```json
+\`\`\`json
 {
-  "task": "<skill goal>",
-  "steps": ["<measured UI step 1>", "..."],
-  "object": "AfterFX.exe",
-  "close": false
+  "task": "...",
+  "steps": ["...", "..."],
+  "object": "AfterFX.exe"
 }
-```
+\`\`\`
 
-The compiler preserves `measured_ui_steps` verbatim. It does not invent recovery actions, scripts, APIs, or hidden automation.
+\`FollowerSession\` reads those steps in order through \`PlanReader\`.
 
-## Observed controller capabilities in the pinned upstream
+The adapter compiles directly from each skill's canonical:
 
-The audited UFO controller exposes mechanisms for:
+- \`goal\`
+- \`measured_ui_steps\`
+- \`fixture_id\`
 
-- semantic control click,
-- relative-coordinate click,
-- relative-coordinate drag,
-- keyboard input,
-- key press,
-- mouse movement,
-- scrolling,
-- text input,
-- control annotation.
+The measured steps are preserved verbatim.
 
-These are execution capabilities only. The pilot still forbids absolute coordinates as the sole targeting method and forbids scripting APIs for the measured skill.
+The task instruction adds only the execution boundary: visible After Effects UI only; no scripts, expressions, COM, application APIs, shell commands, or direct \`.aep\` mutation.
 
-## Validate plans
+## Critical upstream round-budget fix
 
-```bat
+The pinned upstream \`config/ufo/system.yaml\` defaults:
+
+\`\`\`text
+MAX_ROUND: 1
+\`\`\`
+
+Follower Mode uses its first round to select the target application and subsequent rounds for the supplied plan steps. Therefore the baseline value is not sufficient for our multi-step pilot plans.
+
+The isolated pilot overlay sets:
+
+\`\`\`text
+MAX_ROUND = measured_step_count + 2
+MAX_STEP  = max(50, measured_step_count * 12)
+\`\`\`
+
+This is applied only inside the temporary execution worktree.
+
+## Measured-execution overlay
+
+For every run the adapter creates:
+
+\`\`\`text
+config/ufo/system_pilot.yaml
+\`\`\`
+
+and starts UFO with:
+
+\`\`\`text
+UFO_ENV=pilot
+\`\`\`
+
+The overlay enforces:
+
+\`\`\`yaml
+CONTROL_BACKEND: ["uia"]
+USE_APIS: false
+USE_MCP: false
+MCP_FALLBACK_TO_UI: false
+EVA_SESSION: false
+EVA_ROUND: false
+TASK_STATUS: false
+SAVE_EXPERIENCE: "always_not"
+ASK_QUESTION: false
+USE_CUSTOMIZATION: false
+ENABLED_THIRD_PARTY_AGENTS: []
+INPUT_TEXT_API: "type_keys"
+CLICK_API: "click_input"
+\`\`\`
+
+This keeps the measured path on the visible Windows UI and removes UFO's API/MCP/evaluation/experience routes from the pilot execution.
+
+The deterministic verifier remains the only success oracle.
+
+## Fixture binding
+
+UFO cannot run against an arbitrary \`.aep\`.
+
+The adapter requires the Step 03 **disposable run copy** and checks:
+
+- file exists,
+- extension is \`.aep\`,
+- filename matches the skill's \`fixture_id\`,
+- parent folder equals the SHA-256-derived run workspace,
+- actual fixture SHA-256 equals the certified run-copy hash.
+
+The canonical fixture itself is rejected.
+
+The fixture must already be loaded before measured UFO execution. Opening/preparing the fixture is not counted as a measured UFO action.
+
+## Run identity
+
+Each \`run_id\` is one-use only.
+
+The adapter writes a persistent run registry record before execution. Deleting the run output directory does not make the ID reusable.
+
+Every prepared run stores:
+
+- skill ID,
+- fixture ID,
+- fixture path/hash,
+- Follower plan,
+- plan SHA-256,
+- required UFO commit,
+- timestamps,
+- stdout/stderr,
+- copied UFO logs when available,
+- execution result.
+
+## Validate all ten plans
+
+\`\`\`bat
 python -m ufo_adapter.cli validate-plans
-```
+\`\`\`
 
-This compiles all ten skills and reports their deterministic plan hashes.
+## Inspect one compiled plan
 
-## Inspect one plan
-
-```bat
+\`\`\`bat
 python -m ufo_adapter.cli plan --skill-id AE-PILOT-004
-```
+\`\`\`
 
-## Validate a local UFO checkout
+## Validate the existing UFO checkout
 
-```bat
+\`\`\`bat
 python -m ufo_adapter.cli validate-checkout ^
-  --ufo-checkout C:\path\to\UFO
-```
+  --ufo-checkout "C:\Users\AL-BASHA\UFO"
+\`\`\`
 
-A mismatched commit or dirty checkout is rejected.
+This does not run UFO or change the checkout.
 
-## Prepare a command without executing UFO
+## Preview the measured command
 
-```bat
+Requires a Step 03 disposable fixture copy:
+
+\`\`\`bat
 python -m ufo_adapter.cli command ^
-  --ufo-checkout C:\path\to\UFO ^
+  --ufo-checkout "C:\Users\AL-BASHA\UFO" ^
   --skill-id AE-PILOT-004 ^
-  --run-id AE-PILOT-004-RUN-1
-```
+  --run-id AE-PILOT-004-RUN-1 ^
+  --fixture-path "<run-copy>\FX-004-POSITION-READY.aep" ^
+  --fixture-sha256 "<certified-copy-sha256>"
+\`\`\`
 
-This creates the run-specific immutable plan and prints the exact command. UFO is not launched.
+Preview does not consume the run ID.
 
 ## Execute one measured plan
 
-Execution is guarded by an explicit arming flag:
+Execution requires an explicit arm flag:
 
-```bat
+\`\`\`bat
 python -m ufo_adapter.cli execute ^
-  --ufo-checkout C:\path\to\UFO ^
+  --ufo-checkout "C:\Users\AL-BASHA\UFO" ^
   --skill-id AE-PILOT-004 ^
   --run-id AE-PILOT-004-RUN-1 ^
+  --fixture-path "<run-copy>\FX-004-POSITION-READY.aep" ^
+  --fixture-sha256 "<certified-copy-sha256>" ^
   --arm-measured-execution
-```
+\`\`\`
 
-Run IDs cannot be reused.
+A zero UFO process exit code is **not PASS**. It is execution evidence only.
 
-Every run stores:
+## Step boundary
 
-- generated plan,
-- plan SHA-256,
-- locked UFO commit,
-- stdout,
-- stderr,
-- start/end timestamps,
-- process exit code,
-- execution result JSON.
+Step 04 is responsible only for the UFO execution layer.
 
-These artifacts are execution evidence, not success evidence.
+It does not:
 
-## Integration boundary
+- materialize fixtures,
+- choose or benchmark the final model (Step 05),
+- orchestrate the complete pre/post run lifecycle (later Runner step),
+- assign pilot run status.
 
-Before UFO runs, the later orchestrator must ensure:
-
-1. a certified Step 03 run copy exists,
-2. the expected fixture is loaded,
-3. AE Reader pre-state is fresh,
-4. Verifier preflight says the run may execute.
-
-After UFO finishes:
-
-1. capture a fresh AE Reader post-state,
-2. pass the post-state and execution metadata to the deterministic verifier,
-3. let the verifier assign the run status.
-
-UFO's own FINISH/completion output never produces PASS by itself.
+This separation keeps the lab auditable and prevents UFO from becoming its own judge.
