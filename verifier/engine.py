@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import ntpath
 from numbers import Real
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -24,7 +25,11 @@ def _same_windows_path(left: str, right: str) -> bool:
 
 
 def _is_number(value: Any) -> bool:
-    return isinstance(value, Real) and not isinstance(value, bool)
+    return (
+        isinstance(value, Real)
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
 
 
 def _fixture_tolerance(path: str, policy: Dict[str, Any]) -> float:
@@ -608,6 +613,13 @@ class DeterministicVerifier:
         blocked_reason: Optional[str] = None,
         ui_change_evidence: Optional[Dict[str, Any]] = None,
     ) -> RunDecision:
+        if not isinstance(execution_completed, bool):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "EXECUTION_FLAG_INVALID",
+                "execution_completed must be an explicit boolean",
+            )
+
         supplied_runtime = dict(runtime or {})
         pinned_runtime = dict(preflight.details.get("runtime") or {})
 
@@ -662,7 +674,12 @@ class DeterministicVerifier:
         if isinstance(ui_change_evidence, dict) and not execution_completed:
             route_changed = ui_change_evidence.get("route_changed") is True
             capability_exists = ui_change_evidence.get("capability_still_exists") is True
-            if route_changed and capability_exists:
+            independent_evidence = ui_change_evidence.get("evidence")
+            evidence_present = (
+                isinstance(independent_evidence, (str, list, dict))
+                and bool(independent_evidence)
+            )
+            if route_changed and capability_exists and evidence_present:
                 return RunDecision(
                     "UI_CHANGED",
                     "EVIDENCE_BACKED_UI_CHANGE",
