@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -81,6 +82,17 @@ class PilotContract:
         if self.raw.get("format_version") != "1.2":
             errors.append("unsupported pilot format_version")
 
+        expected_skill_ids = {f"AE-PILOT-{index:03d}" for index in range(1, 11)}
+        if set(self.skills) != expected_skill_ids:
+            missing = sorted(expected_skill_ids - set(self.skills))
+            extra = sorted(set(self.skills) - expected_skill_ids)
+            if missing:
+                errors.append("pilot is missing baseline skills: " + ", ".join(missing))
+            if extra:
+                errors.append("pilot has unexpected baseline skill ids: " + ", ".join(extra))
+        if len(self.fixtures) != 10:
+            errors.append("format 1.2 baseline requires exactly 10 fixture specifications")
+
         pilot = self.raw.get("pilot") or {}
         if pilot.get("execution_mode") != "UI_ONLY":
             errors.append("pilot execution_mode must remain UI_ONLY")
@@ -88,6 +100,74 @@ class PilotContract:
             errors.append("pilot source_of_truth_for_success must remain AE_READER")
         if pilot.get("isolation_model") != "ONE_SKILL_ONE_FRESH_FIXTURE":
             errors.append("pilot isolation model must remain one-skill-one-fresh-fixture")
+        if self.required_repetitions != 3:
+            errors.append("format 1.2 baseline requires exactly 3 repetitions per skill")
+
+        expected_environment = {
+            "operating_system": "Windows",
+        }
+        for key, expected in expected_environment.items():
+            if self.environment_contract.get(key) != expected:
+                errors.append(f"environment_contract.{key} must be {expected!r}")
+
+        display = self.environment_contract.get("display") or {}
+        if display.get("required_resolution") != "1920x1080":
+            errors.append("environment_contract.display.required_resolution must be 1920x1080")
+        if display.get("required_scaling_percent") != 100:
+            errors.append("environment_contract.display.required_scaling_percent must be 100")
+
+        ae_environment = self.environment_contract.get("after_effects") or {}
+        if ae_environment.get("required_major_version") != 26:
+            errors.append("environment_contract.after_effects.required_major_version must be 26")
+        if ae_environment.get("required_language") != "en-US":
+            errors.append("environment_contract.after_effects.required_language must be en-US")
+        if ae_environment.get("required_workspace_id") != "PILOT_WORKSPACE":
+            errors.append("environment_contract.after_effects.required_workspace_id must be PILOT_WORKSPACE")
+        if ae_environment.get("exact_build_policy") != "record_and_pin_for_pilot_batch":
+            errors.append("environment_contract.after_effects.exact_build_policy must remain record_and_pin_for_pilot_batch")
+
+        run_identity = self.environment_contract.get("run_identity") or {}
+        for identity_flag in (
+            "require_unique_run_id",
+            "require_start_timestamp",
+            "require_fixture_id",
+            "require_fixture_path",
+            "require_request_id",
+        ):
+            if run_identity.get(identity_flag) is not True:
+                errors.append(f"environment_contract.run_identity.{identity_flag} must be true")
+
+        policy = self.comparison_policy
+        numeric_tolerance_keys = (
+            "default_numeric_absolute_tolerance",
+            "percent_absolute_tolerance",
+            "pixel_absolute_tolerance",
+            "duration_seconds_absolute_tolerance",
+            "frame_rate_absolute_tolerance",
+        )
+        for tolerance_key in numeric_tolerance_keys:
+            value = policy.get(tolerance_key)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or float(value) < 0
+            ):
+                errors.append(f"comparison_policy.{tolerance_key} must be a finite non-negative number")
+        keyframe_policy = policy.get("keyframe_time_policy") or {}
+        if keyframe_policy.get("primary_unit") != "frame":
+            errors.append("comparison_policy.keyframe_time_policy.primary_unit must be frame")
+        frame_tolerance = keyframe_policy.get("frame_tolerance")
+        if not isinstance(frame_tolerance, int) or isinstance(frame_tolerance, bool) or frame_tolerance < 0:
+            errors.append("comparison_policy.keyframe_time_policy.frame_tolerance must be a non-negative integer")
+        seconds_tolerance = keyframe_policy.get("secondary_seconds_tolerance")
+        if (
+            isinstance(seconds_tolerance, bool)
+            or not isinstance(seconds_tolerance, (int, float))
+            or not math.isfinite(float(seconds_tolerance))
+            or float(seconds_tolerance) < 0
+        ):
+            errors.append("comparison_policy.keyframe_time_policy.secondary_seconds_tolerance must be finite and non-negative")
 
         if not isinstance(self.ae_reader_contract.get("expected_reader_version"), str):
             errors.append("ae_reader_contract.expected_reader_version is required")
@@ -106,14 +186,32 @@ class PilotContract:
             if extra:
                 errors.append("pilot declares unsupported operators: " + ", ".join(extra))
 
-        known_capabilities = set(
-            self.ae_reader_contract.get("known_capability_ids") or []
-        )
+        known_capability_list = self.ae_reader_contract.get("known_capability_ids") or []
+        if not isinstance(known_capability_list, list) or not all(
+            isinstance(item, str) and item for item in known_capability_list
+        ):
+            errors.append("ae_reader_contract.known_capability_ids must be a list of non-empty strings")
+            known_capabilities = set()
+        else:
+            known_capabilities = set(known_capability_list)
+            if len(known_capabilities) != len(known_capability_list):
+                errors.append("ae_reader_contract.known_capability_ids contains duplicates")
+        if "project.file_identity" not in known_capabilities:
+            errors.append("ae_reader_contract must include project.file_identity")
 
         used_fixtures: List[str] = []
         for skill_id, skill in self.skills.items():
             if skill.get("independent") is not True:
                 errors.append(f"{skill_id} must be marked independent")
+
+            goal = skill.get("goal")
+            if not isinstance(goal, str) or not goal.strip():
+                errors.append(f"{skill_id} is missing a non-empty goal")
+            measured_steps = skill.get("measured_ui_steps")
+            if not isinstance(measured_steps, list) or not measured_steps or not all(
+                isinstance(step, str) and step.strip() for step in measured_steps
+            ):
+                errors.append(f"{skill_id} measured_ui_steps must be a non-empty list of strings")
 
             fixture_id = skill.get("fixture_id")
             used_fixtures.append(str(fixture_id))
@@ -121,9 +219,11 @@ class PilotContract:
                 errors.append(f"{skill_id} references unknown fixture {fixture_id!r}")
 
             required_caps = skill.get("required_reader_capabilities") or []
-            if not isinstance(required_caps, list) or not all(isinstance(item, str) for item in required_caps):
+            if not isinstance(required_caps, list) or not all(isinstance(item, str) and item for item in required_caps):
                 errors.append(f"{skill_id} has invalid required_reader_capabilities")
             else:
+                if len(set(required_caps)) != len(required_caps):
+                    errors.append(f"{skill_id} has duplicate required_reader_capabilities")
                 unknown_caps = sorted(set(required_caps) - known_capabilities)
                 if unknown_caps:
                     errors.append(
@@ -132,7 +232,7 @@ class PilotContract:
                     )
 
             preferred_caps = skill.get("preferred_reader_capabilities") or []
-            if not isinstance(preferred_caps, list) or not all(isinstance(item, str) for item in preferred_caps):
+            if not isinstance(preferred_caps, list) or not all(isinstance(item, str) and item for item in preferred_caps):
                 errors.append(f"{skill_id} has invalid preferred_reader_capabilities")
             else:
                 unknown_preferred = sorted(set(preferred_caps) - known_capabilities)
@@ -163,6 +263,25 @@ class PilotContract:
                     if op not in SUPPORTED_OPERATORS:
                         errors.append(
                             f"{skill_id} {phase}[{index}] unsupported operator {op!r}"
+                        )
+
+                    required_for_assertion = set()
+                    if isinstance(path, str):
+                        if ".effects" in path or path.endswith(".effects"):
+                            required_for_assertion.add("effect.list")
+                        if "stable_id" in path or op == "contains_effect_stable_id":
+                            required_for_assertion.add("effect.identity.stable_id")
+                        if ".property[" in path:
+                            required_for_assertion.add("effect.property.identity")
+                        if ".effects" in path and path.endswith(".value"):
+                            required_for_assertion.add("effect.property.value")
+                    missing_assertion_caps = sorted(
+                        required_for_assertion - set(required_caps if isinstance(required_caps, list) else [])
+                    )
+                    if missing_assertion_caps:
+                        errors.append(
+                            f"{skill_id} {phase}[{index}] requires undeclared reader capabilities: "
+                            + ", ".join(missing_assertion_caps)
                         )
 
         if len(used_fixtures) != len(set(used_fixtures)):
