@@ -302,5 +302,42 @@ class FixtureMaterializerTests(unittest.TestCase):
             repository.verify_canonical("FX-002-COMP-EMPTY")
 
 
+    def test_materializer_rejects_reader_evidence_older_than_save_boundary(self):
+        class LateSaveBuilder(_FakeBuilder):
+            def build(self, fixture_id, output_path, *, timeout, acknowledge_disposable_project):
+                result = super().build(
+                    fixture_id,
+                    output_path,
+                    timeout=timeout,
+                    acknowledge_disposable_project=acknowledge_disposable_project,
+                )
+                result["saved_at"] = 30.0
+                result["finished_at"] = 31.0
+                return result
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            shutil.copy2(CONTRACT_PATH, root / "pilot_10_skills.yaml")
+            contract = load_contract(root / "pilot_10_skills.yaml")
+            repository = FixtureRepository(contract, repo_root=root)
+            builder = LateSaveBuilder()
+            reader = _FakeReader(
+                contract,
+                "FX-002-COMP-EMPTY",
+                lambda: repository.canonical_path("FX-002-COMP-EMPTY"),
+            )
+            materializer = FixtureMaterializer(
+                contract,
+                repository=repository,
+                builder=builder,
+                reader=reader,
+            )
+            with self.assertRaises(FixtureCertificationError):
+                materializer.materialize_one(
+                    "FX-002-COMP-EMPTY",
+                    acknowledge_disposable_project=True,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
