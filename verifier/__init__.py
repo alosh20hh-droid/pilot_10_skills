@@ -1,7 +1,7 @@
 """Deterministic, fail-closed verifier for the AE 10-skill pilot."""
 
 from .assertions import SUPPORTED_OPERATORS, evaluate_assertions
-from .calibration import run_calibration
+from .calibration import run_calibration, run_pilot_calibration
 from .contract import ContractError, PilotContract
 from .engine import (
     DeterministicVerifier,
@@ -23,6 +23,7 @@ __all__ = [
     "SUPPORTED_OPERATORS",
     "evaluate_assertions",
     "run_calibration",
+    "run_pilot_calibration",
     "ContractError",
     "PilotContract",
     "DeterministicVerifier",
