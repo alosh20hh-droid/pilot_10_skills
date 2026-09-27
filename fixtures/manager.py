@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -265,6 +266,7 @@ class FixtureRepository:
         if (
             isinstance(saved_at, bool)
             or not isinstance(saved_at, (int, float))
+            or not math.isfinite(float(saved_at))
             or float(saved_at) <= 0
         ):
             raise FixtureCertificationError(
