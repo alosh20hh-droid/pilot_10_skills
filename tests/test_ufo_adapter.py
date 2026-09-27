@@ -165,6 +165,34 @@ class UFORunnerTests(unittest.TestCase):
                     fixture_sha256=fixture_hash,
                 )
 
+    def test_run_id_remains_reserved_even_if_run_directory_is_deleted(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(
+                root,
+                output_root=root / "runs",
+                run_registry_root=root / "registry",
+            )
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-003")
+            fixture, fixture_hash = make_fixture(
+                root, plan.fixture_id, "persistent-ufo-run"
+            )
+            prepared = runner.prepare_run(
+                run_id="persistent-ufo-run",
+                plan=plan,
+                fixture_path=fixture,
+                fixture_sha256=fixture_hash,
+            )
+            shutil.rmtree(prepared["run_dir"])
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id="persistent-ufo-run",
+                    plan=plan,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
+                )
+
     def test_command_preview_does_not_consume_run_id(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
