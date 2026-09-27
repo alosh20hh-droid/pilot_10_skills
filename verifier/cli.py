@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
-from .calibration import run_calibration
+from .calibration import run_calibration, run_pilot_calibration
 from .contract import ContractError, PilotContract
 from .engine import DeterministicVerifier
 
@@ -48,7 +48,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("validate-contract", help="Load and validate the pilot contract")
-    sub.add_parser("calibrate", help="Run mandatory positive/negative/stale controls")
+    sub.add_parser("calibrate", help="Run software self-calibration controls")
+
+    pilot_cal = sub.add_parser(
+        "calibrate-pilot",
+        help="Run the actual pre-pilot calibration gate against fresh canonical-fixture evidence",
+    )
+    pilot_cal.add_argument("--evidence", required=True)
+    pilot_cal.add_argument("--fixture-id", default="FX-002-COMP-EMPTY")
+    pilot_cal.add_argument("--run-id", required=True)
+    pilot_cal.add_argument("--request-id", required=True)
+    pilot_cal.add_argument("--fresh-after", required=True, type=float)
 
     run = sub.add_parser("verify-run", help="Verify one complete measured run from a JSON bundle")
     run.add_argument("--bundle", required=True)
@@ -127,6 +137,19 @@ def main(argv: list[str] | None = None) -> int:
         result = run_calibration(contract)
         _print(result)
         return 0 if result["passed"] else 1
+
+    if args.command == "calibrate-pilot":
+        evidence = _load_json(args.evidence)
+        result = run_pilot_calibration(
+            contract,
+            evidence=evidence,
+            fixture_id=args.fixture_id,
+            expected_run_id=args.run_id,
+            expected_request_id=args.request_id,
+            min_captured_at=args.fresh_after,
+        )
+        _print(result)
+        return 0 if result["passed"] and result["satisfies_pilot_gate"] else 2
 
     if args.command == "verify-run":
         bundle = _load_json(args.bundle)
