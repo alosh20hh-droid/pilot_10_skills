@@ -14,6 +14,7 @@ from verifier import (
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "pilot_10_skills.yaml"
+TEST_FIXTURE_PATH = r"C:\\pilot\\run\\fixture.aep"
 
 
 def contract():
@@ -31,12 +32,15 @@ def good_environment():
         "ae_language": "en-US",
         "workspace_id": "PILOT_WORKSPACE",
         "ae_build": "26.0-test",
+        "fixture_path": TEST_FIXTURE_PATH,
     }
 
 
-def evidence_for(state, *, run_id="run-1", request_id="request-1", captured_at=20.0, capabilities=None, status="OK"):
+def evidence_for(state, *, run_id="run-1", request_id="request-1", captured_at=20.0, capabilities=None, status="OK", file_path=TEST_FIXTURE_PATH):
     c = contract()
     known = list(c.ae_reader_contract["known_capability_ids"])
+    copied_state = copy.deepcopy(state)
+    copied_state.setdefault("project", {})["file_path"] = file_path
     return {
         "status": status,
         "request_id": request_id,
@@ -49,7 +53,7 @@ def evidence_for(state, *, run_id="run-1", request_id="request-1", captured_at=2
             "schema_version": c.expected_reader_schema_version(),
             "supported_capabilities": list(capabilities if capabilities is not None else known),
         },
-        "state": copy.deepcopy(state),
+        "state": copied_state,
         "errors": [],
     }
 
@@ -312,6 +316,36 @@ class PreflightTests(unittest.TestCase):
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "CONTRADICTORY_EVIDENCE")
+
+    def test_fixture_file_identity_mismatch_blocks(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(
+                fixture_state("AE-PILOT-004"),
+                captured_at=20,
+                file_path=r"C:\\pilot\\run\\wrong.aep",
+            ),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "FIXTURE_IDENTITY_MISMATCH")
+
+    def test_missing_expected_fixture_path_blocks(self):
+        environment = good_environment()
+        environment.pop("fixture_path")
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=environment,
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "FIXTURE_IDENTITY_REQUIRED")
 
     def test_environment_mismatch_blocks(self):
         environment = good_environment()
