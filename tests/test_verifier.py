@@ -462,6 +462,7 @@ class PreflightTests(unittest.TestCase):
             run_started_at=10,
             environment=good_environment(),
             runtime={"stable_effect_id": "ADBE Gaussian Blur 2"},
+            expected_ae_build="26.0-test",
         )
         self.assertTrue(decision.can_execute)
 
