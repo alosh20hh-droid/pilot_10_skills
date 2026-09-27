@@ -354,7 +354,20 @@ def check_environment(
 
     observed_build = actual.get("ae_build")
     details["observed_ae_build"] = observed_build
-    if expected_ae_build is not None and observed_build != expected_ae_build:
+    exact_build_policy = ae_contract.get("exact_build_policy")
+    if exact_build_policy == "record_and_pin_for_pilot_batch":
+        if expected_ae_build is None:
+            return False, "AE_BUILD_PIN_REQUIRED", (
+                "the pilot requires an exact After Effects build pinned for the batch"
+            ), {
+                "actual": observed_build,
+            }
+        if observed_build != expected_ae_build:
+            return False, "ENVIRONMENT_MISMATCH", "After Effects build differs from pinned pilot build", {
+                "expected": expected_ae_build,
+                "actual": observed_build,
+            }
+    elif expected_ae_build is not None and observed_build != expected_ae_build:
         return False, "ENVIRONMENT_MISMATCH", "After Effects build differs from pinned pilot build", {
             "expected": expected_ae_build,
             "actual": observed_build,
