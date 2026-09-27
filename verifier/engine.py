@@ -390,6 +390,7 @@ def _runtime_calibration_check(
         return True, None, {}
 
     missing = []
+    invalid = []
     resolved: Dict[str, Any] = {}
     for key, contract_value in calibration.items():
         if key == "rule":
@@ -400,10 +401,20 @@ def _runtime_calibration_check(
             resolved[key] = contract_value
         else:
             missing.append(key)
+            continue
+
+        if key.endswith("_id") and (
+            not isinstance(resolved[key], str) or not resolved[key].strip()
+        ):
+            invalid.append(key)
 
     if missing:
         return False, "runtime calibration missing: " + ", ".join(sorted(missing)), {
             "missing_runtime_calibration": sorted(missing)
+        }
+    if invalid:
+        return False, "runtime calibration invalid: " + ", ".join(sorted(invalid)), {
+            "invalid_runtime_calibration": sorted(invalid)
         }
     return True, None, resolved
 
