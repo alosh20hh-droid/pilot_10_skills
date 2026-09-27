@@ -1,0 +1,29 @@
+{
+  "repository": "microsoft/UFO",
+  "commit": "e2a03126241c696fdaf9a669a271ca3fca6d9916",
+  "required_mode": "follower",
+  "forbidden_modes": ["batch_normal", "operator", "normal_operator"],
+  "plan_schema": {
+    "required_fields": ["task", "steps", "object"],
+    "object": "AfterFX.exe",
+    "close": false
+  },
+  "audited_sources": [
+    "ufo/ufo.py",
+    "ufo/module/session_pool.py",
+    "ufo/module/sessions/plan_reader.py",
+    "ufo/module/sessions/session.py",
+    "ufo/automator/ui_control/controller.py"
+  ],
+  "controller_capabilities_observed": [
+    "semantic_control_click",
+    "relative_coordinate_click",
+    "relative_coordinate_drag",
+    "keyboard_input",
+    "key_press",
+    "mouse_move",
+    "scroll",
+    "text_input",
+    "control_annotation"
+  ]
+}
