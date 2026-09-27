@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     pilot_cal.add_argument("--fixture-id", default="FX-002-COMP-EMPTY")
     pilot_cal.add_argument("--run-id", required=True)
     pilot_cal.add_argument("--request-id", required=True)
+    pilot_cal.add_argument("--fixture-path", required=True)
     pilot_cal.add_argument("--fresh-after", required=True, type=float)
 
     run = sub.add_parser("verify-run", help="Verify one complete measured run from a JSON bundle")
@@ -188,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             fixture_id=args.fixture_id,
             expected_run_id=args.run_id,
             expected_request_id=args.request_id,
+            expected_fixture_path=args.fixture_path,
             min_captured_at=args.fresh_after,
         )
         _print(result)
