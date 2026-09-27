@@ -2,7 +2,7 @@
 
 This folder contains the read-only After Effects state reader used by the 10-skill verification pilot.
 
-Current reader version: `2.0.0`
+Current reader version: `2.1.0`
 
 Current schema version: `2`
 
