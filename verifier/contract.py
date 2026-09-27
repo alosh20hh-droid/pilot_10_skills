@@ -267,6 +267,64 @@ class PilotContract:
 
                     required_for_assertion = set()
                     if isinstance(path, str):
+                        if path == "project.composition_count":
+                            required_for_assertion.add("project.composition_count")
+                        if path.startswith("active_comp."):
+                            if path.endswith(".name"):
+                                required_for_assertion.add("composition.identity")
+                            if path.endswith(".width") or path.endswith(".height"):
+                                required_for_assertion.add("composition.dimensions")
+                            if path.endswith(".duration_seconds"):
+                                required_for_assertion.add("composition.duration")
+                            if path.endswith(".frame_rate"):
+                                required_for_assertion.add("composition.frame_rate")
+                            if (
+                                path.endswith(".current_time_seconds")
+                                or path.endswith(".current_time_frame")
+                            ):
+                                required_for_assertion.add("composition.current_time")
+
+                        if path == "layers" or path.startswith("layers[") or path.startswith("layer["):
+                            required_for_assertion.add("layer.list")
+                        if path.startswith("layer["):
+                            required_for_assertion.add("layer.identity")
+                        if ".type" in path:
+                            required_for_assertion.add("layer.type")
+                        if ".source_text" in path:
+                            required_for_assertion.add("layer.source_text")
+                        if ".index" in path and (
+                            path.startswith("layer[") or path.startswith("layers[")
+                        ):
+                            required_for_assertion.add("layer.index")
+                        if any(
+                            token in path
+                            for token in (".in_seconds", ".out_seconds", ".start_seconds")
+                        ):
+                            required_for_assertion.add("layer.timing")
+                        if ".transform.position." in path:
+                            required_for_assertion.add("layer.transform.position")
+                        if ".transform.scale." in path:
+                            required_for_assertion.add("layer.transform.scale")
+                        if ".transform.opacity_percent" in path:
+                            required_for_assertion.add("layer.transform.opacity")
+                        if ".properties.opacity.keyframe_count" in path:
+                            required_for_assertion.add("property.keyframes.count")
+                        if ".properties.opacity.keyframes" in path:
+                            if op == "contains_keyframe":
+                                if assertion.get("frame") is not None or assertion.get("time_seconds") is not None:
+                                    required_for_assertion.add("property.keyframes.time")
+                                if assertion.get("value") is not None:
+                                    required_for_assertion.add("property.keyframes.value")
+
+                        if path == "layers":
+                            if op in {"contains_layer", "not_contains_layer_name", "count_layer_name"}:
+                                required_for_assertion.add("layer.identity")
+                            if op == "contains_layer":
+                                if "type" in assertion:
+                                    required_for_assertion.add("layer.type")
+                                if "source_text" in assertion:
+                                    required_for_assertion.add("layer.source_text")
+
                         if ".effects" in path or path.endswith(".effects"):
                             required_for_assertion.add("effect.list")
                         if "stable_id" in path or op == "contains_effect_stable_id":
