@@ -1,3 +1,4 @@
+import copy
 import json
 import tempfile
 import time
@@ -185,6 +186,36 @@ class SchemaTests(unittest.TestCase):
         prop = data["layers"][0]["effects"][0]["properties"][0]
         prop["num_keys"] = 1
         prop["keys"] = []
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+
+    def test_layer_count_mismatch_is_rejected(self):
+        data = sample_response()
+        data["composition"]["num_layers"] = 2
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_duplicate_layer_identity_is_rejected(self):
+        data = sample_response()
+        duplicate = copy.deepcopy(data["layers"][0])
+        duplicate["index"] = 2
+        duplicate["name"] = "OTHER_LAYER"
+        data["layers"].append(duplicate)
+        data["composition"]["num_layers"] = 2
+        data["composition"]["selected_layers_count"] = 2
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_layer_without_stable_identity_is_rejected(self):
+        data = sample_response()
+        data["layers"][0]["layer_id"] = None
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_selected_layer_count_mismatch_is_rejected(self):
+        data = sample_response()
+        data["composition"]["selected_layers_count"] = 0
         with self.assertRaises(ValueError):
             AEStateSnapshot.from_dict(data)
 
