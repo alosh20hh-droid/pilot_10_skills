@@ -68,7 +68,8 @@
       "USE_CUSTOMIZATION": false,
       "ENABLED_THIRD_PARTY_AGENTS": [],
       "INPUT_TEXT_API": "type_keys",
-      "CLICK_API": "click_input"
+      "CLICK_API": "click_input",
+      "USE_APIS": false
     },
     "dynamic_round_budget_rule": "MAX_ROUND = measured_step_count + 2",
     "minimum_step_budget": 50
