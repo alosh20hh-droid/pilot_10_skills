@@ -258,6 +258,19 @@ class FixtureRepositoryTests(unittest.TestCase):
                 "run-unique-1",
             )
 
+    def test_run_id_remains_reserved_after_disposable_copy_cleanup(self):
+        self._certify()
+        self.repository.create_run_copy(
+            "FX-004-POSITION-READY",
+            "run-persistent-id",
+        )
+        self.repository.remove_run_copy("run-persistent-id")
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.create_run_copy(
+                "FX-004-POSITION-READY",
+                "run-persistent-id",
+            )
+
     def test_uncertified_fixture_cannot_be_copied(self):
         with self.assertRaises(FixtureCertificationError):
             self.repository.create_run_copy(
