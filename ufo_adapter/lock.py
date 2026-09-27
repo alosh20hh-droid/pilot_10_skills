@@ -29,6 +29,7 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
         "plan_schema",
         "audited_sources",
         "required_files",
+        "execution_overlay",
     }
     missing = sorted(required - set(value))
     if missing:
@@ -61,6 +62,43 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
         raise UFOLockError(
             "audited_sources must exactly match required_files"
         )
+
+    overlay = value.get("execution_overlay")
+    if not isinstance(overlay, dict):
+        raise UFOLockError("execution_overlay must be an object")
+    if overlay.get("environment") != "pilot":
+        raise UFOLockError("UFO execution overlay environment must be pilot")
+    if overlay.get("file") != "config/ufo/system_pilot.yaml":
+        raise UFOLockError("unexpected UFO execution overlay path")
+    required_settings = overlay.get("required_settings")
+    if not isinstance(required_settings, dict):
+        raise UFOLockError("execution_overlay.required_settings must be an object")
+    expected_overlay_settings = {
+        "CONTROL_BACKEND": ["uia"],
+        "USE_APIS": False,
+        "USE_MCP": False,
+        "MCP_FALLBACK_TO_UI": False,
+        "EVA_SESSION": False,
+        "EVA_ROUND": False,
+        "TASK_STATUS": False,
+        "SAVE_EXPERIENCE": "always_not",
+        "ASK_QUESTION": False,
+        "USE_CUSTOMIZATION": False,
+        "ENABLED_THIRD_PARTY_AGENTS": [],
+        "INPUT_TEXT_API": "type_keys",
+        "CLICK_API": "click_input",
+    }
+    for key, expected in expected_overlay_settings.items():
+        if required_settings.get(key) != expected:
+            raise UFOLockError(
+                f"UFO execution overlay setting {key} must be {expected!r}"
+            )
+    if overlay.get("dynamic_round_budget_rule") != "MAX_ROUND = measured_step_count + 2":
+        raise UFOLockError("unexpected UFO follower round-budget rule")
+    minimum_step_budget = overlay.get("minimum_step_budget")
+    if not isinstance(minimum_step_budget, int) or minimum_step_budget < 1:
+        raise UFOLockError("execution_overlay.minimum_step_budget must be positive")
+
     return value
 
 
