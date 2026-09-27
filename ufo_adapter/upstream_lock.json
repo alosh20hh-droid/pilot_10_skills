@@ -18,11 +18,16 @@
   },
   "audited_sources": [
     "config/config_loader.py",
+    "config/ufo/mcp.yaml",
     "config/ufo/system.yaml",
     "documents/docs/ufo2/advanced_usage/follower_mode.md",
     "ufo/__main__.py",
     "ufo/automator/ui_control/controller.py",
+    "ufo/client/computer.py",
+    "ufo/client/mcp/local_servers/ui_mcp_server.py",
+    "ufo/config/__init__.py",
     "ufo/module/basic.py",
+    "ufo/module/dispatcher.py",
     "ufo/module/session_pool.py",
     "ufo/module/sessions/plan_reader.py",
     "ufo/module/sessions/session.py",
@@ -49,7 +54,12 @@
     "config/ufo/system.yaml": "878e2d3a401cf5fd5a53f804241ad8108931639d",
     "documents/docs/ufo2/advanced_usage/follower_mode.md": "3fd6fe85a5e89fbc24c7fae2ae92d56bc1ae2dcd",
     "config/config_loader.py": "219522ff056fcc15b24b52902ce4d5efd68c0f95",
-    "ufo/module/basic.py": "505fed97b28bc4e38a2eada608a4663020cd57df"
+    "ufo/module/basic.py": "505fed97b28bc4e38a2eada608a4663020cd57df",
+    "config/ufo/mcp.yaml": "20a83c974de7473b76cf588b8772eab3ed8fb783",
+    "ufo/client/computer.py": "095696f8062a29fdf9ab18b646db51ebca776982",
+    "ufo/module/dispatcher.py": "d71861e6d23b23db078920deca37e91f19f60920",
+    "ufo/config/__init__.py": "e6a080efae3d124262e275b065663f4c1813bc3b",
+    "ufo/client/mcp/local_servers/ui_mcp_server.py": "665a83efcd18e349512703dc1d5c142b0a6ac544"
   },
   "execution_overlay": {
     "environment": "test",
@@ -73,5 +83,33 @@
     },
     "dynamic_round_budget_rule": "MAX_ROUND = measured_step_count + 2",
     "minimum_step_budget": 50
+  },
+  "execution_route_policy": {
+    "transport_note": "UFO UI actions use local MCP transport internally; measured execution restricts the temporary mcp.yaml to UI-only servers.",
+    "config_file": "config/ufo/mcp.yaml",
+    "allowed_agents": [
+      "HostAgent",
+      "AppAgent"
+    ],
+    "allowed_data_collection_namespaces": [
+      "UICollector"
+    ],
+    "allowed_action_namespaces": [
+      "HostUIExecutor",
+      "AppUIExecutor"
+    ],
+    "forbidden_namespaces": [
+      "CommandLineExecutor",
+      "WordCOMExecutor",
+      "ExcelCOMExecutor",
+      "PowerPointCOMExecutor",
+      "PDFReaderExecutor",
+      "HardwareCollector",
+      "HardwareExecutor",
+      "BashExecutor",
+      "MobileDataCollector",
+      "MobileActionExecutor",
+      "ConstellationEditor"
+    ]
   }
 }
