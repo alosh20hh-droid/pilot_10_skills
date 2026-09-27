@@ -5,6 +5,8 @@ on:
     paths:
       - "ae_reader/**"
       - "tests/**"
+      - "pilot_10_skills.yaml"
+      - "pilot_10_skills.yaml"
       - ".github/workflows/ae-reader-tests.yml"
   pull_request:
     paths:
@@ -22,5 +24,7 @@ jobs:
           python-version: "3.11"
       - name: Reader self-check
         run: python -m ae_reader.cli self-check
+      - name: Contract alignment
+        run: python -m ae_reader.contract_check
       - name: Unit tests
         run: python -m unittest discover -s tests -v
