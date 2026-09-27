@@ -1,6 +1,7 @@
 import hashlib
 import json
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -8,6 +9,7 @@ from unittest import mock
 from ufo_adapter import (
     UFOExecutionError,
     UFOMeasuredRunner,
+    UFOWorkspaceManager,
     compile_all_plans,
     compile_skill_plan,
     load_upstream_lock,
@@ -17,6 +19,30 @@ from verifier.contract import PilotContract
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = PilotContract.load(ROOT / "pilot_10_skills.yaml")
+
+
+def make_fake_git_ufo(root: Path):
+    files = {
+        "config/ufo/system.yaml": "MAX_ROUND: 1\nCONTROL_BACKEND: [uia]\n",
+        "ufo/__main__.py": "# fake\n",
+    }
+    for relative, content in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    subprocess.run(["git", "-C", str(root), "init"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.email", "pilot@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.name", "Pilot Test"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-m", "fake"], check=True, capture_output=True)
+    head = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return head
 
 
 def make_fixture(root: Path, fixture_id: str, run_id: str = "run-1"):
@@ -83,6 +109,10 @@ class UFOLockTests(unittest.TestCase):
         )
         self.assertEqual(lock["required_mode"], "follower")
         self.assertIn("batch_normal", lock["forbidden_modes"])
+        self.assertIn("config/config_loader.py", lock["required_files"])
+        self.assertIn("ufo/module/basic.py", lock["required_files"])
+        self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_APIS"])
+        self.assertFalse(lock["execution_overlay"]["required_settings"]["USE_MCP"])
 
     def test_audited_controller_capabilities_are_declared(self):
         lock = load_upstream_lock()
@@ -94,6 +124,55 @@ class UFOLockTests(unittest.TestCase):
             "mouse_move",
             "scroll",
         }.issubset(capabilities))
+
+
+class UFOWorkspaceTests(unittest.TestCase):
+    def test_overlay_forces_ui_only_execution_and_enough_follower_rounds(self):
+        overlay = UFOWorkspaceManager.build_overlay(4)
+        self.assertEqual(overlay["CONTROL_BACKEND"], ["uia"])
+        self.assertFalse(overlay["USE_APIS"])
+        self.assertFalse(overlay["USE_MCP"])
+        self.assertFalse(overlay["MCP_FALLBACK_TO_UI"])
+        self.assertFalse(overlay["EVA_SESSION"])
+        self.assertEqual(overlay["SAVE_EXPERIENCE"], "always_not")
+        self.assertEqual(overlay["MAX_ROUND"], 6)
+        self.assertGreaterEqual(overlay["MAX_STEP"], 50)
+
+    def test_overlay_is_written_only_to_detached_worktree(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "ufo"
+            root.mkdir()
+            head = make_fake_git_ufo(root)
+            manager = UFOWorkspaceManager(
+                root,
+                base_dir=Path(temp) / "worktrees",
+            )
+            workspace = manager.create(
+                commit=head,
+                measured_step_count=3,
+            )
+            try:
+                overlay_path = Path(workspace.overlay_path)
+                self.assertTrue(overlay_path.is_file())
+                self.assertFalse(
+                    (root / "config" / "ufo" / "system_pilot.yaml").exists()
+                )
+                import yaml
+                overlay = yaml.safe_load(overlay_path.read_text(encoding="utf-8"))
+                self.assertFalse(overlay["USE_APIS"])
+                self.assertFalse(overlay["USE_MCP"])
+                self.assertEqual(overlay["MAX_ROUND"], 5)
+            finally:
+                manager.remove(workspace.worktree_root)
+
+            self.assertFalse(Path(workspace.worktree_root).exists())
+            status = subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertEqual(status, "")
 
 
 class UFORunnerTests(unittest.TestCase):
