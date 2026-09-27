@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fixtures import (
     FixtureBuildError,
+    FixtureBuilder,
     FixtureCertificationError,
     FixtureMaterializer,
     FixtureRepository,
@@ -92,6 +93,26 @@ class FixtureSpecTests(unittest.TestCase):
         request = plan.to_request(r"C:\fixture.aep")
         self.assertEqual(request["lab_mode"], "DISPOSABLE_FIXTURE_BUILD")
         self.assertEqual(request["fixture_id"], "FX-004-POSITION-READY")
+
+
+class FixtureBuilderPythonTests(unittest.TestCase):
+    def test_builder_requires_explicit_disposable_project_ack(self):
+        builder = FixtureBuilder(load_contract())
+        with self.assertRaises(FixtureBuildError):
+            builder.build(
+                "FX-001-EMPTY-PROJECT",
+                "fixture.aep",
+                acknowledge_disposable_project=False,
+            )
+
+    def test_builder_rejects_non_aep_output_before_launching_after_effects(self):
+        builder = FixtureBuilder(load_contract())
+        with self.assertRaises(FixtureBuildError):
+            builder.build(
+                "FX-001-EMPTY-PROJECT",
+                "fixture.txt",
+                acknowledge_disposable_project=True,
+            )
 
 
 class FixtureBuilderSourceTests(unittest.TestCase):
