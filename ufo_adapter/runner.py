@@ -95,6 +95,7 @@ class UFOMeasuredRunner:
         *,
         python_executable: Optional[str] = None,
         output_root: Optional[str | Path] = None,
+        run_registry_root: Optional[str | Path] = None,
         lock_path: Optional[str | Path] = None,
     ) -> None:
         self.ufo_checkout = Path(ufo_checkout).expanduser().resolve()
@@ -105,6 +106,10 @@ class UFOMeasuredRunner:
         self.output_root = Path(
             output_root
             or (Path(__file__).resolve().parents[1] / "ufo_adapter" / "runs")
+        )
+        self.run_registry_root = Path(
+            run_registry_root
+            or (Path(__file__).resolve().parents[1] / "ufo_adapter" / "run_registry")
         )
         self.lock = load_upstream_lock(lock_path)
 
@@ -199,19 +204,49 @@ class UFOMeasuredRunner:
 
         run_key = _safe_name(run_id)
         run_dir = self.output_root / run_key
-        if run_dir.exists():
-            raise UFOExecutionError("UFO run directory already exists; run_id reuse is forbidden")
+        registry_path = self.run_registry_root / f"{run_key}.json"
+        if run_dir.exists() or registry_path.exists():
+            raise UFOExecutionError(
+                "UFO run_id was already used; measured run identity reuse is forbidden"
+            )
 
-        run_dir.mkdir(parents=True, exist_ok=False)
-        plan_path = run_dir / "plan.json"
-        metadata_path = run_dir / "metadata.json"
+        self.output_root.mkdir(parents=True, exist_ok=True)
+        self.run_registry_root.mkdir(parents=True, exist_ok=True)
+        try:
+            handle = os.open(
+                registry_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            )
+            with os.fdopen(handle, "w", encoding="utf-8") as registry_file:
+                json.dump(
+                    {
+                        "run_id": run_id,
+                        "run_key": run_key,
+                        "skill_id": plan.skill_id,
+                        "fixture_id": plan.fixture_id,
+                        "reserved_at": time.time(),
+                    },
+                    registry_file,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+        except FileExistsError as exc:
+            raise UFOExecutionError(
+                "UFO run_id was already used; measured run identity reuse is forbidden"
+            ) from exc
 
-        plan_path.write_bytes(execution_plan.serialized_bytes())
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            plan_path = run_dir / "plan.json"
+            metadata_path = run_dir / "metadata.json"
 
-        plan_hash = hashlib.sha256(plan_path.read_bytes()).hexdigest()
-        if plan_hash != execution_plan.sha256():
-            raise UFOExecutionError("serialized UFO plan hash mismatch")
-        metadata = {
+            plan_path.write_bytes(execution_plan.serialized_bytes())
+
+            plan_hash = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+            if plan_hash != execution_plan.sha256():
+                raise UFOExecutionError("serialized UFO plan hash mismatch")
+            metadata = {
             "run_id": run_id,
             "skill_id": plan.skill_id,
             "fixture_id": plan.fixture_id,
@@ -223,18 +258,26 @@ class UFOMeasuredRunner:
             "ufo_mode": "follower",
             "prepared_at": time.time(),
         }
-        metadata_path.write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
+            metadata_path.write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
 
-        return {
-            "run_key": run_key,
-            "run_dir": run_dir,
-            "plan_path": plan_path,
-            "metadata_path": metadata_path,
-            "plan_sha256": plan_hash,
-        }
+            return {
+                "run_key": run_key,
+                "run_dir": run_dir,
+                "plan_path": plan_path,
+                "metadata_path": metadata_path,
+                "plan_sha256": plan_hash,
+            }
+        except Exception:
+            import shutil
+            shutil.rmtree(run_dir, ignore_errors=True)
+            try:
+                registry_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
 
     def preview_command(
         self,
