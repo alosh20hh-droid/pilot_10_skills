@@ -78,6 +78,7 @@ environment_contract:
     require_unique_run_id: true
     require_start_timestamp: true
     require_fixture_id: true
+    require_fixture_path: true
     require_request_id: true
   preflight:
     - "After Effects process is running."
@@ -88,6 +89,7 @@ environment_contract:
     - "After Effects language equals en-US."
     - "Workspace identity equals PILOT_WORKSPACE."
     - "The expected fixture state is loaded."
+    - "The exact disposable fixture file path matches AE Reader project.file_path."
     - "AE Reader returns a fresh response bound to the current run_id and request_id."
     - "All required AE Reader capabilities for the selected skill are present."
   note: "The pilot intentionally locks language, workspace, resolution, and scaling. Variation testing belongs to a later robustness phase, not the baseline pilot."
