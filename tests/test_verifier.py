@@ -271,6 +271,48 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(decision.run_status, "BLOCKED")
         self.assertEqual(decision.reason_code, "READER_CAPABILITY_MISSING")
 
+    def test_missing_operating_system_evidence_blocks(self):
+        environment = good_environment()
+        environment.pop("operating_system")
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=environment,
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "ENVIRONMENT_MISMATCH")
+
+    def test_missing_modal_dialog_evidence_blocks(self):
+        environment = good_environment()
+        environment.pop("unknown_modal_dialog")
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=environment,
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "ENVIRONMENT_MISSING")
+
+    def test_reader_ok_with_errors_is_rejected(self):
+        evidence = evidence_for(fixture_state("AE-PILOT-004"), captured_at=20)
+        evidence["errors"] = ["contradictory reader error"]
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence,
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "CONTRADICTORY_EVIDENCE")
+
     def test_environment_mismatch_blocks(self):
         environment = good_environment()
         environment["display_scaling_percent"] = 125
