@@ -87,7 +87,7 @@ The following ideas were validated against the external code and then reimplemen
 
 ## AE Reader v2 contract
 
-Version: `2.0.0`
+Version: `2.1.0`
 
 Schema: `2`
 
