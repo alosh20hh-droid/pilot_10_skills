@@ -529,6 +529,21 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_MISSING")
 
+
+    def test_skill_10_rejects_non_string_effect_identity_calibration(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-010",
+            evidence=evidence_for(fixture_state("AE-PILOT-010"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            runtime={"stable_effect_id": 123},
+            expected_ae_build="26.0-test",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_MISSING")
+
     def test_skill_10_calibration_unlocks_preflight(self):
         decision = self.verifier.verify_preflight(
             skill_id="AE-PILOT-010",
