@@ -43,11 +43,15 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--ufo-checkout", required=True)
     command.add_argument("--skill-id", required=True)
     command.add_argument("--run-id", required=True)
+    command.add_argument("--fixture-path", required=True)
+    command.add_argument("--fixture-sha256", required=True)
 
     execute = sub.add_parser("execute", help="Run one measured UFO Follower Mode plan")
     execute.add_argument("--ufo-checkout", required=True)
     execute.add_argument("--skill-id", required=True)
     execute.add_argument("--run-id", required=True)
+    execute.add_argument("--fixture-path", required=True)
+    execute.add_argument("--fixture-sha256", required=True)
     execute.add_argument("--timeout", type=float, default=None)
     execute.add_argument(
         "--arm-measured-execution",
@@ -114,7 +118,12 @@ def main(argv: list[str] | None = None) -> int:
             plan = compile_skill_plan(contract, args.skill_id)
             runner = UFOMeasuredRunner(args.ufo_checkout)
             checkout = runner.validate_environment()
-            preview = runner.preview_command(run_id=args.run_id, plan=plan)
+            preview = runner.preview_command(
+                run_id=args.run_id,
+                plan=plan,
+                fixture_path=args.fixture_path,
+                fixture_sha256=args.fixture_sha256,
+            )
             _print({
                 "status": "READY",
                 "checkout": checkout,
@@ -131,6 +140,8 @@ def main(argv: list[str] | None = None) -> int:
             result = runner.execute(
                 run_id=args.run_id,
                 plan=plan,
+                fixture_path=args.fixture_path,
+                fixture_sha256=args.fixture_sha256,
                 arm_measured_execution=args.arm_measured_execution,
                 timeout=args.timeout,
             )
