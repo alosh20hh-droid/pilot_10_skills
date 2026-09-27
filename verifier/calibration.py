@@ -10,6 +10,7 @@ Only the pilot calibration satisfies the pre-pilot gate in pilot_10_skills.yaml.
 from __future__ import annotations
 
 import copy
+import ntpath
 from typing import Any, Dict, Optional
 
 from .assertions import evaluate_assertions
@@ -119,6 +120,7 @@ def run_pilot_calibration(
     fixture_id: str,
     expected_run_id: str,
     expected_request_id: str,
+    expected_fixture_path: str,
     min_captured_at: float,
 ) -> Dict[str, Any]:
     """Run the three required controls against fresh canonical-fixture evidence."""
@@ -140,16 +142,36 @@ def run_pilot_calibration(
         min_captured_at=min_captured_at,
     )
 
+    identity_error = None
+    if fresh.valid:
+        supported = set(fresh.details.get("supported_capabilities") or [])
+        if "project.file_identity" not in supported:
+            identity_error = "project.file_identity capability is missing"
+        elif not isinstance(expected_fixture_path, str) or not expected_fixture_path:
+            identity_error = "expected fixture path is missing"
+        else:
+            project = (fresh.state or {}).get("project")
+            observed_path = project.get("file_path") if isinstance(project, dict) else None
+            if (
+                not isinstance(observed_path, str)
+                or not observed_path
+                or ntpath.normcase(ntpath.normpath(observed_path))
+                != ntpath.normcase(ntpath.normpath(expected_fixture_path))
+            ):
+                identity_error = "calibration evidence belongs to a different project file"
+
     fixture = contract.fixtures[fixture_id]
     fixture_state = fixture.get("required_state")
-    if fresh.valid and isinstance(fixture_state, dict):
+    if fresh.valid and identity_error is None and isinstance(fixture_state, dict):
         mismatches = compare_fixture_state(
             fixture_state,
             fresh.state,
             comparison_policy=contract.comparison_policy,
         )
     else:
-        mismatches = [{"reason": fresh.reason or "invalid fixture state"}]
+        mismatches = [{
+            "reason": identity_error or fresh.reason or "invalid fixture state"
+        }]
 
     positive_status = "PASS" if fresh.valid and not mismatches else "INCONCLUSIVE"
 
@@ -218,6 +240,7 @@ def run_pilot_calibration(
         "satisfies_pilot_gate": passed,
         "passed": passed,
         "fixture_id": fixture_id,
+        "fixture_path": expected_fixture_path,
         "run_id": expected_run_id,
         "request_id": expected_request_id,
         "controls": controls,
