@@ -78,6 +78,22 @@ class PilotContract:
     def validate(self) -> List[str]:
         errors: List[str] = []
 
+        if self.raw.get("format_version") != "1.2":
+            errors.append("unsupported pilot format_version")
+
+        pilot = self.raw.get("pilot") or {}
+        if pilot.get("execution_mode") != "UI_ONLY":
+            errors.append("pilot execution_mode must remain UI_ONLY")
+        if pilot.get("source_of_truth_for_success") != "AE_READER":
+            errors.append("pilot source_of_truth_for_success must remain AE_READER")
+        if pilot.get("isolation_model") != "ONE_SKILL_ONE_FRESH_FIXTURE":
+            errors.append("pilot isolation model must remain one-skill-one-fresh-fixture")
+
+        if not isinstance(self.ae_reader_contract.get("expected_reader_version"), str):
+            errors.append("ae_reader_contract.expected_reader_version is required")
+        if not isinstance(self.ae_reader_contract.get("expected_schema_version"), int):
+            errors.append("ae_reader_contract.expected_schema_version is required")
+
         declared_ops = (
             ((self.raw.get("assertion_operator_contract") or {}).get("supported"))
             or []
@@ -94,8 +110,13 @@ class PilotContract:
             self.ae_reader_contract.get("known_capability_ids") or []
         )
 
+        used_fixtures: List[str] = []
         for skill_id, skill in self.skills.items():
+            if skill.get("independent") is not True:
+                errors.append(f"{skill_id} must be marked independent")
+
             fixture_id = skill.get("fixture_id")
+            used_fixtures.append(str(fixture_id))
             if fixture_id not in self.fixtures:
                 errors.append(f"{skill_id} references unknown fixture {fixture_id!r}")
 
@@ -108,6 +129,17 @@ class PilotContract:
                     errors.append(
                         f"{skill_id} references unknown reader capabilities: "
                         + ", ".join(unknown_caps)
+                    )
+
+            preferred_caps = skill.get("preferred_reader_capabilities") or []
+            if not isinstance(preferred_caps, list) or not all(isinstance(item, str) for item in preferred_caps):
+                errors.append(f"{skill_id} has invalid preferred_reader_capabilities")
+            else:
+                unknown_preferred = sorted(set(preferred_caps) - known_capabilities)
+                if unknown_preferred:
+                    errors.append(
+                        f"{skill_id} references unknown preferred reader capabilities: "
+                        + ", ".join(unknown_preferred)
                     )
 
             assertions = skill.get("assertions")
@@ -132,6 +164,13 @@ class PilotContract:
                         errors.append(
                             f"{skill_id} {phase}[{index}] unsupported operator {op!r}"
                         )
+
+        if len(used_fixtures) != len(set(used_fixtures)):
+            errors.append("each skill must use a distinct fixture in the baseline pilot")
+
+        for fixture_id, fixture in self.fixtures.items():
+            if not isinstance(fixture.get("required_state"), dict):
+                errors.append(f"{fixture_id} is missing required_state")
 
         status_model = self.raw.get("status_model") or {}
         allowed_runs = set(((status_model.get("run_status") or {}).get("allowed")) or [])
