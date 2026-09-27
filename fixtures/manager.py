@@ -129,6 +129,12 @@ class FixtureRepository:
                 f"{evidence_check.error_code}: {evidence_check.reason}"
             )
 
+        supported = set(evidence_check.details.get("supported_capabilities") or [])
+        if "project.file_identity" not in supported:
+            raise FixtureCertificationError(
+                "AE Reader cannot certify fixture identity: project.file_identity capability is missing"
+            )
+
         state = evidence_check.state or {}
         project = state.get("project")
         if not isinstance(project, dict):
