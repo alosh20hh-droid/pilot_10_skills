@@ -613,6 +613,7 @@ class PostVerificationTests(unittest.TestCase):
             skill_id="AE-PILOT-010",
             evidence=evidence_for(
                 fixture_state("AE-PILOT-010"),
+                run_id="run-10",
                 request_id="pre-10",
                 captured_at=20,
             ),
