@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from numbers import Real
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -22,7 +23,11 @@ SUPPORTED_OPERATORS = {
 
 
 def _is_number(value: Any) -> bool:
-    return isinstance(value, Real) and not isinstance(value, bool)
+    return (
+        isinstance(value, Real)
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
 
 
 def _safe_expected(assertion: Dict[str, Any]) -> Any:
