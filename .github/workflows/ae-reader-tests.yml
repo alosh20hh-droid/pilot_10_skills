@@ -1,16 +1,20 @@
-name: AE Reader tests
+name: AE verification systems
 
 on:
   push:
     paths:
       - "ae_reader/**"
+      - "verifier/**"
       - "tests/**"
+      - "requirements.txt"
       - "pilot_10_skills.yaml"
       - ".github/workflows/ae-reader-tests.yml"
   pull_request:
     paths:
       - "ae_reader/**"
+      - "verifier/**"
       - "tests/**"
+      - "requirements.txt"
       - "pilot_10_skills.yaml"
       - ".github/workflows/ae-reader-tests.yml"
 
@@ -22,9 +26,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
       - name: Reader self-check
         run: python -m ae_reader.cli self-check
-      - name: Contract alignment
+      - name: Reader contract alignment
         run: python -m ae_reader.contract_check
+      - name: Verifier contract validation
+        run: python -m verifier.cli validate-contract
+      - name: Verifier calibration
+        run: python -m verifier.cli calibrate
       - name: Unit tests
         run: python -m unittest discover -s tests -v
