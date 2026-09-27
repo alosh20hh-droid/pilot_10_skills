@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
+from numbers import Real
 from pathlib import Path
 from typing import Any, Dict
 
@@ -69,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, Real)
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
+
+
 def _verify_bundle(verifier: DeterministicVerifier, bundle: Dict[str, Any]) -> Dict[str, Any]:
     required = [
         "skill_id",
@@ -83,28 +93,57 @@ def _verify_bundle(verifier: DeterministicVerifier, bundle: Dict[str, Any]) -> D
     missing = [key for key in required if key not in bundle]
     if missing:
         raise SystemExit("verification bundle missing fields: " + ", ".join(missing))
-    if bool(bundle.get("execution_completed")) and not bundle.get("post_request_id"):
+
+    for key in ("skill_id", "run_id", "pre_request_id"):
+        if not isinstance(bundle.get(key), str) or not bundle[key]:
+            raise SystemExit(f"verification bundle field {key} must be a non-empty string")
+    for key in ("run_started_at", "last_action_at"):
+        if not _finite_number(bundle.get(key)):
+            raise SystemExit(f"verification bundle field {key} must be a finite number")
+    if not isinstance(bundle.get("environment"), dict):
+        raise SystemExit("verification bundle environment must be an object")
+    if not isinstance(bundle.get("pre_evidence"), dict):
+        raise SystemExit("verification bundle pre_evidence must be an object")
+    if not isinstance(bundle.get("execution_completed"), bool):
+        raise SystemExit("verification bundle execution_completed must be a boolean")
+    if bundle.get("runtime") is not None and not isinstance(bundle.get("runtime"), dict):
+        raise SystemExit("verification bundle runtime must be an object")
+    if bundle.get("ui_change_evidence") is not None and not isinstance(
+        bundle.get("ui_change_evidence"), dict
+    ):
+        raise SystemExit("verification bundle ui_change_evidence must be an object")
+    if bundle.get("blocked_reason") is not None and not isinstance(
+        bundle.get("blocked_reason"), str
+    ):
+        raise SystemExit("verification bundle blocked_reason must be a string")
+
+    post_request_id = bundle.get("post_request_id")
+    if post_request_id is not None and (
+        not isinstance(post_request_id, str) or not post_request_id
+    ):
+        raise SystemExit("verification bundle post_request_id must be a non-empty string")
+    if bundle["execution_completed"] and not post_request_id:
         raise SystemExit("verification bundle requires post_request_id after completed execution")
 
     preflight = verifier.verify_preflight(
-        skill_id=str(bundle["skill_id"]),
+        skill_id=bundle["skill_id"],
         evidence=bundle["pre_evidence"],
-        expected_run_id=str(bundle["run_id"]),
-        expected_request_id=bundle.get("pre_request_id"),
-        run_started_at=float(bundle["run_started_at"]),
+        expected_run_id=bundle["run_id"],
+        expected_request_id=bundle["pre_request_id"],
+        run_started_at=bundle["run_started_at"],
         environment=bundle["environment"],
         runtime=bundle.get("runtime") or {},
         expected_ae_build=bundle.get("expected_ae_build"),
     )
 
     decision = verifier.verify_post(
-        skill_id=str(bundle["skill_id"]),
+        skill_id=bundle["skill_id"],
         preflight=preflight,
-        execution_completed=bool(bundle["execution_completed"]),
+        execution_completed=bundle["execution_completed"],
         evidence=bundle.get("post_evidence"),
-        expected_run_id=str(bundle["run_id"]),
+        expected_run_id=bundle["run_id"],
         expected_request_id=bundle.get("post_request_id"),
-        last_action_at=float(bundle["last_action_at"]),
+        last_action_at=bundle["last_action_at"],
         runtime=bundle.get("runtime") or {},
         blocked_reason=bundle.get("blocked_reason"),
         ui_change_evidence=bundle.get("ui_change_evidence"),
