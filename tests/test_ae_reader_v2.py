@@ -173,6 +173,21 @@ class SchemaTests(unittest.TestCase):
         self.assertIsNotNone(prop)
         self.assertEqual(prop.value, 25)
 
+
+    def test_non_string_reader_error_is_rejected(self):
+        data = sample_response()
+        data["errors"] = [123]
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_effect_property_key_count_mismatch_is_rejected(self):
+        data = sample_response()
+        prop = data["layers"][0]["effects"][0]["properties"][0]
+        prop["num_keys"] = 1
+        prop["keys"] = []
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
     def test_duplicate_layer_name_is_ambiguous_and_fail_closed(self):
         data = sample_response()
         duplicate = dict(data["layers"][0])
