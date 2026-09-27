@@ -513,6 +513,7 @@ skills:
     fixture_id: "FX-004-POSITION-READY"
     required_reader_capabilities:
       - "layer.identity"
+      - "layer.list"
       - "layer.transform.position"
     goal: "Set PILOT_TEXT position to X=960 and Y=540."
     measured_ui_steps:
@@ -539,6 +540,7 @@ skills:
     fixture_id: "FX-005-SCALE-READY"
     required_reader_capabilities:
       - "layer.identity"
+      - "layer.list"
       - "layer.transform.scale"
     goal: "Set PILOT_TEXT uniform scale from 100 percent to 125 percent."
     measured_ui_steps:
@@ -565,6 +567,7 @@ skills:
     fixture_id: "FX-006-OPACITY-READY"
     required_reader_capabilities:
       - "layer.identity"
+      - "layer.list"
       - "layer.transform.opacity"
       - "property.keyframes.count"
     goal: "Set PILOT_TEXT opacity from 100 percent to 40 percent without creating keyframes."
@@ -593,6 +596,7 @@ skills:
     required_reader_capabilities:
       - "composition.current_time"
       - "layer.identity"
+      - "layer.list"
       - "property.keyframes.count"
       - "property.keyframes.time"
       - "property.keyframes.value"
@@ -695,6 +699,8 @@ skills:
       - "A stable effect identity for the installed Gaussian Blur variant has been resolved and stored in runtime calibration."
     required_reader_capabilities:
       - "effect.list"
+      - "layer.list"
+      - "layer.identity"
       - "effect.identity.stable_id"
       - "effect.property.identity"
       - "effect.property.value"
