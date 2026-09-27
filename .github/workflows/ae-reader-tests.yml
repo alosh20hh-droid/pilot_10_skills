@@ -6,12 +6,12 @@ on:
       - "ae_reader/**"
       - "tests/**"
       - "pilot_10_skills.yaml"
-      - "pilot_10_skills.yaml"
       - ".github/workflows/ae-reader-tests.yml"
   pull_request:
     paths:
       - "ae_reader/**"
       - "tests/**"
+      - "pilot_10_skills.yaml"
       - ".github/workflows/ae-reader-tests.yml"
 
 jobs:
