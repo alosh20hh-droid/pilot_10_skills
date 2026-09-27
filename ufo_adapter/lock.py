@@ -20,6 +20,47 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
         raise UFOLockError(f"unable to load UFO upstream lock: {exc}") from exc
     if not isinstance(value, dict):
         raise UFOLockError("UFO upstream lock must be an object")
+
+    required = {
+        "repository",
+        "commit",
+        "required_mode",
+        "forbidden_modes",
+        "plan_schema",
+        "audited_sources",
+        "required_files",
+    }
+    missing = sorted(required - set(value))
+    if missing:
+        raise UFOLockError(
+            "UFO upstream lock missing fields: " + ", ".join(missing)
+        )
+    if value.get("repository") != "microsoft/UFO":
+        raise UFOLockError("UFO upstream repository must be microsoft/UFO")
+    commit = value.get("commit")
+    if not isinstance(commit, str) or len(commit) != 40:
+        raise UFOLockError("UFO upstream commit must be a full 40-character SHA")
+    if value.get("required_mode") != "follower":
+        raise UFOLockError("UFO upstream lock must require follower mode")
+    plan_schema = value.get("plan_schema")
+    if not isinstance(plan_schema, dict):
+        raise UFOLockError("UFO plan_schema must be an object")
+    if plan_schema.get("required_fields") != ["task", "steps", "object"]:
+        raise UFOLockError("unexpected UFO follower plan field contract")
+    if plan_schema.get("object") != "AfterFX.exe":
+        raise UFOLockError("UFO baseline plan object must be AfterFX.exe")
+    required_files = value.get("required_files")
+    if not isinstance(required_files, dict) or not required_files:
+        raise UFOLockError("UFO required_files must be a non-empty object")
+    for path, blob_sha in required_files.items():
+        if not isinstance(path, str) or not path:
+            raise UFOLockError("invalid UFO required file path")
+        if not isinstance(blob_sha, str) or len(blob_sha) != 40:
+            raise UFOLockError(f"invalid UFO blob SHA for {path}")
+    if set(value.get("audited_sources") or []) != set(required_files):
+        raise UFOLockError(
+            "audited_sources must exactly match required_files"
+        )
     return value
 
 
@@ -54,8 +95,27 @@ def inspect_checkout(
     except UFOLockError:
         origin = ""
 
-    required_files = list(lock.get("audited_sources") or [])
+    required_files = dict(lock.get("required_files") or {})
     missing_files = [path for path in required_files if not (repo / path).is_file()]
+    blob_mismatches = []
+    for path, expected_blob in required_files.items():
+        if path in missing_files:
+            continue
+        try:
+            actual_blob = _run_git(repo, "rev-parse", f"HEAD:{path}")
+        except UFOLockError:
+            blob_mismatches.append({
+                "path": path,
+                "expected": expected_blob,
+                "actual": None,
+            })
+            continue
+        if actual_blob != expected_blob:
+            blob_mismatches.append({
+                "path": path,
+                "expected": expected_blob,
+                "actual": actual_blob,
+            })
 
     expected_commit = lock.get("commit")
     commit_matches = isinstance(expected_commit, str) and head == expected_commit
@@ -69,7 +129,13 @@ def inspect_checkout(
         "worktree_changes": status.splitlines() if status else [],
         "origin": origin,
         "missing_audited_files": missing_files,
-        "valid": commit_matches and status == "" and not missing_files,
+        "blob_mismatches": blob_mismatches,
+        "valid": (
+            commit_matches
+            and status == ""
+            and not missing_files
+            and not blob_mismatches
+        ),
     }
 
 
@@ -84,6 +150,13 @@ def require_locked_checkout(
         raise UFOLockError(
             "UFO checkout is missing audited files: "
             + ", ".join(result["missing_audited_files"])
+        )
+    if result.get("blob_mismatches"):
+        details = ", ".join(
+            item["path"] for item in result["blob_mismatches"]
+        )
+        raise UFOLockError(
+            "UFO audited file blobs do not match the pinned upstream: " + details
         )
     if not result["commit_matches"]:
         raise UFOLockError(
