@@ -68,14 +68,18 @@ class FixtureMaterializer:
             raise RuntimeError("AE Reader certification response is missing request_id")
 
         # The reader is invoked only after the builder has confirmed the file
-        # was saved. Its capture must therefore be newer than the builder start.
+        # was saved. Bind certification freshness to the save boundary itself.
+        save_boundary = build_result.get("saved_at")
+        if not isinstance(save_boundary, (int, float)) or isinstance(save_boundary, bool):
+            save_boundary = build_result["finished_at"]
+
         record = self.repository.certify(
             fixture_id,
             aep_path=output,
             evidence=evidence,
             expected_run_id=certification_run_id,
             expected_request_id=request_id,
-            min_captured_at=float(build_result["started_at"]),
+            min_captured_at=float(save_boundary),
             builder_result=build_result,
         )
 
