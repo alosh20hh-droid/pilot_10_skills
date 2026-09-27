@@ -269,6 +269,32 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "FIXTURE_STATE_MISMATCH")
 
+
+    def test_empty_project_preflight_for_skill_1_passes(self):
+        state = fixture_state("AE-PILOT-001")
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-001",
+            evidence=evidence_for(state, captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertTrue(decision.can_execute)
+
+    def test_pinned_build_mismatch_blocks(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            expected_ae_build="26.0-other-build",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "ENVIRONMENT_MISMATCH")
+
     def test_skill_10_requires_runtime_calibration(self):
         decision = self.verifier.verify_preflight(
             skill_id="AE-PILOT-010",
@@ -349,6 +375,25 @@ class PostVerificationTests(unittest.TestCase):
         )
         self.assertEqual(decision.run_status, "INCONCLUSIVE")
         self.assertEqual(decision.reason_code, "STALE_EVIDENCE")
+
+
+    def test_duplicate_capabilities_are_rejected_as_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        evidence = evidence_for(state, request_id="post-1", captured_at=40)
+        evidence["capabilities"]["supported_capabilities"].append(
+            evidence["capabilities"]["supported_capabilities"][0]
+        )
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence,
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "MALFORMED_EVIDENCE")
 
     def test_missing_post_evidence_is_inconclusive(self):
         decision = self.verifier.verify_post(
