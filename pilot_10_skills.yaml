@@ -695,10 +695,10 @@ skills:
       - "A stable effect identity for the installed Gaussian Blur variant has been resolved and stored in runtime calibration."
     required_reader_capabilities:
       - "effect.list"
-      - "effect.property.value"
-    preferred_reader_capabilities:
       - "effect.identity.stable_id"
       - "effect.property.identity"
+      - "effect.property.value"
+    preferred_reader_capabilities: []
     runtime_calibration:
       stable_effect_id: null
       rule: "Do not hard-code an unverified internal effect identifier. Resolve it from the installed AE build before enabling this skill."
