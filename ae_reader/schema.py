@@ -600,6 +600,41 @@ class AEStateSnapshot:
         for optional_identity in ("session_id", "lesson_id", "step_id"):
             if value.get(optional_identity) is not None and not isinstance(value.get(optional_identity), str):
                 raise ValueError(f"invalid {optional_identity}")
+        capabilities = AECapabilityManifest.from_dict(value["capabilities"])
+        project = AEProjectSnapshot.from_dict(value["project"])
+        composition = AECompositionSnapshot.from_dict(value["composition"])
+        layers = [AELayerSnapshot.from_dict(item) for item in layers_raw]
+
+        if project.item_count < project.composition_count:
+            raise ValueError("project composition count exceeds item count")
+
+        if composition.available:
+            if project.composition_count < 1:
+                raise ValueError("active composition exists while project reports zero compositions")
+            if composition.item_id is None or composition.item_id < 1:
+                raise ValueError("active composition is missing a stable item id")
+            if composition.num_layers is None or composition.num_layers < 0:
+                raise ValueError("active composition is missing a valid layer count")
+            if len(layers) != composition.num_layers:
+                raise ValueError("composition layer count does not match returned layers")
+            expected_indices = list(range(1, composition.num_layers + 1))
+            actual_indices = [layer.index for layer in layers]
+            if actual_indices != expected_indices:
+                raise ValueError("returned layer indices are incomplete or out of order")
+            selected_count = sum(1 for layer in layers if layer.selected)
+            if selected_count != composition.selected_layers_count:
+                raise ValueError("selected layer count does not match layer flags")
+        elif layers:
+            raise ValueError("layers returned without an active composition")
+
+        layer_ids = []
+        for layer in layers:
+            if layer.layer_id is None or layer.layer_id < 1:
+                raise ValueError("layer is missing a stable identity")
+            layer_ids.append(layer.layer_id)
+        if len(layer_ids) != len(set(layer_ids)):
+            raise ValueError("duplicate layer identity")
+
         return cls(
             schema_version=SCHEMA_VERSION,
             reader_version=READER_VERSION,
@@ -608,10 +643,10 @@ class AEStateSnapshot:
             run_id=value["run_id"],
             captured_at=captured,
             application=_primitive(application),
-            capabilities=AECapabilityManifest.from_dict(value["capabilities"]),
-            project=AEProjectSnapshot.from_dict(value["project"]),
-            composition=AECompositionSnapshot.from_dict(value["composition"]),
-            layers=[AELayerSnapshot.from_dict(item) for item in layers_raw],
+            capabilities=capabilities,
+            project=project,
+            composition=composition,
+            layers=layers,
             errors=list(errors),
             session_id=value.get("session_id"),
             lesson_id=value.get("lesson_id"),
