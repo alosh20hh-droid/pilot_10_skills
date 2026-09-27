@@ -123,15 +123,19 @@ Only step 6 passing in full can produce `PASS`.
 - completed execution/verification failure with no unresolved ambiguity → `NOT_VERIFIED`
 - `UI_CHANGED`, `BLOCKED`, `INCONCLUSIVE`, or incomplete run count → `NEEDS_REVIEW`
 
-## Mandatory calibration
+## Calibration
 
-Before measured pilot runs:
+There are two deliberately separate calibration levels.
+
+### Software self-calibration
+
+CI runs:
 
 ```bat
 python -m verifier.cli calibrate
 ```
 
-The command must produce:
+This proves the verifier software itself can accept a known-correct synthetic state, reject a deliberately false expectation, and reject stale evidence. It must produce:
 
 ```text
 CAL-POSITIVE  -> PASS
@@ -139,7 +143,30 @@ CAL-NEGATIVE  -> VERIFICATION_FAILED
 CAL-STALE     -> INCONCLUSIVE
 ```
 
-The calibration never mutates After Effects.
+This check is useful, but it **does not satisfy the real pilot gate** because it does not read an actual canonical After Effects fixture.
+
+### Pilot evidence calibration
+
+After Step 3 creates and proves a canonical fixture, capture a fresh AE Reader response from that fixture and run:
+
+```bat
+python -m verifier.cli calibrate-pilot ^
+  --evidence calibration-evidence.json ^
+  --fixture-id FX-002-COMP-EMPTY ^
+  --run-id CAL-LIVE-001 ^
+  --request-id <the-reader-request-id> ^
+  --fresh-after <run-start-timestamp>
+```
+
+Only this mode can return `satisfies_pilot_gate: true`.
+
+It performs the contract's three controls against the same real fixture evidence:
+
+- positive: the fresh state must match the canonical fixture,
+- negative: the verifier injects a deliberately false expected composition count without changing AE,
+- stale: the same response is replayed against a deliberately wrong request identity.
+
+Neither calibration mode mutates After Effects.
 
 ## Validate the source contract
 
