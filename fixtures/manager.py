@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -34,6 +35,20 @@ def _same_path(left: str | Path, right: str | Path) -> bool:
     a = os.path.normcase(os.path.abspath(str(left)))
     b = os.path.normcase(os.path.abspath(str(right)))
     return a == b
+
+
+
+def _parse_major_version(value: Any) -> Optional[int]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    match = re.match(r"^\s*(\d+)", value)
+    return int(match.group(1)) if match else None
+
+
+def _normalize_locale(value: Any) -> Optional[str]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip().replace("_", "-").lower()
 
 
 class FixtureRepository:
@@ -173,11 +188,91 @@ class FixtureRepository:
                 + json.dumps(mismatches, ensure_ascii=False)
             )
 
+        application = evidence.get("application")
+        if not isinstance(application, dict):
+            raise FixtureCertificationError(
+                "AE Reader certification evidence is missing application metadata"
+            )
+
+        ae_contract = self.contract.environment_contract.get("after_effects") or {}
+        required_major = ae_contract.get("required_major_version")
+        observed_reader_version = application.get("version")
+        observed_reader_major = _parse_major_version(observed_reader_version)
+        if (
+            not isinstance(required_major, int)
+            or isinstance(required_major, bool)
+            or observed_reader_major != required_major
+        ):
+            raise FixtureCertificationError(
+                "fixture was not read by the required After Effects major version"
+            )
+
+        required_language = ae_contract.get("required_language")
+        observed_reader_language = application.get("language")
+        if (
+            not isinstance(required_language, str)
+            or _normalize_locale(observed_reader_language)
+            != _normalize_locale(required_language)
+        ):
+            raise FixtureCertificationError(
+                "fixture was not read with the required After Effects language"
+            )
+
+        if not isinstance(builder_result, dict) or not builder_result:
+            raise FixtureCertificationError(
+                "canonical fixture certification requires trusted builder metadata"
+            )
+        if builder_result.get("status") != "SAVED":
+            raise FixtureCertificationError(
+                "fixture builder did not report SAVED"
+            )
+        if builder_result.get("fixture_id") != fixture_id:
+            raise FixtureCertificationError(
+                "fixture builder metadata belongs to a different fixture"
+            )
+        builder_output = builder_result.get("output_path")
+        if (
+            not isinstance(builder_output, str)
+            or not builder_output
+            or not _same_path(builder_output, fixture_path)
+        ):
+            raise FixtureCertificationError(
+                "fixture builder metadata belongs to a different output file"
+            )
+
+        builder_version = builder_result.get("ae_version")
+        builder_major = _parse_major_version(builder_version)
+        if builder_major != required_major:
+            raise FixtureCertificationError(
+                "fixture was not built by the required After Effects major version"
+            )
+        if builder_version != observed_reader_version:
+            raise FixtureCertificationError(
+                "After Effects version changed between fixture build and certification read"
+            )
+
+        builder_language = builder_result.get("ae_language")
+        if _normalize_locale(builder_language) != _normalize_locale(required_language):
+            raise FixtureCertificationError(
+                "fixture builder language does not match the required language"
+            )
+        if _normalize_locale(builder_language) != _normalize_locale(observed_reader_language):
+            raise FixtureCertificationError(
+                "After Effects language changed between fixture build and certification read"
+            )
+
+        saved_at = builder_result.get("saved_at")
+        if (
+            isinstance(saved_at, bool)
+            or not isinstance(saved_at, (int, float))
+            or float(saved_at) <= 0
+        ):
+            raise FixtureCertificationError(
+                "fixture builder metadata is missing a valid saved_at timestamp"
+            )
+
         file_hash = sha256_file(fixture_path)
         size = fixture_path.stat().st_size
-        application = evidence.get("application") or {}
-        if not isinstance(application, dict):
-            application = {}
 
         try:
             canonical_relpath = str(fixture_path.relative_to(self.repo_root.resolve()))
