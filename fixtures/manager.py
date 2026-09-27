@@ -168,10 +168,16 @@ class FixtureRepository:
         if not isinstance(application, dict):
             application = {}
 
+        try:
+            canonical_relpath = str(fixture_path.relative_to(self.repo_root.resolve()))
+        except ValueError:
+            canonical_relpath = None
+
         record = {
             "status": "CERTIFIED",
             "fixture_id": fixture_id,
-            "canonical_path": str(fixture_path),
+            "canonical_relpath": canonical_relpath,
+            "certified_project_file_path": str(fixture_path),
             "sha256": file_hash,
             "size_bytes": size,
             "contract_sha256": self._contract_sha256(),
@@ -226,11 +232,15 @@ class FixtureRepository:
                 f"certified fixture file is missing: {path}"
             )
 
-        record_path = record.get("canonical_path")
-        if not isinstance(record_path, str) or not _same_path(record_path, path):
-            raise FixtureCertificationError(
-                "certification path does not match canonical fixture path"
-            )
+        record_relpath = record.get("canonical_relpath")
+        if record_relpath is not None:
+            if not isinstance(record_relpath, str):
+                raise FixtureCertificationError("invalid canonical_relpath in certification")
+            expected_relative = str(path.relative_to(self.repo_root.resolve()))
+            if record_relpath != expected_relative:
+                raise FixtureCertificationError(
+                    "certification relative path does not match canonical fixture path"
+                )
 
         actual_hash = sha256_file(path)
         if actual_hash != record.get("sha256"):
