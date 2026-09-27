@@ -12,6 +12,7 @@ from ae_reader import (
     READER_VERSION,
     SCHEMA_VERSION,
 )
+from ae_reader.contract_check import check_contract
 
 
 REQUIRED_PILOT_CAPABILITIES = {
@@ -188,6 +189,11 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.reader_version, READER_VERSION)
         self.assertEqual(manifest.schema_version, SCHEMA_VERSION)
         self.assertEqual(manifest.missing(REQUIRED_PILOT_CAPABILITIES), [])
+
+
+class ContractAlignmentTests(unittest.TestCase):
+    def test_pilot_contract_matches_reader_manifest(self):
+        self.assertEqual(check_contract(), [])
 
 
 class FreshnessTests(unittest.TestCase):
