@@ -461,7 +461,7 @@ function writeResponse(response) {
             schema_version: 2,
             supported_capabilities: []
         },
-        project: {item_count: 0, composition_count: 0},
+        project: {item_count: 0, composition_count: 0, file_path: null},
         composition: {available: false, selected_layers_count: 0},
         layers: [],
         errors: [],
@@ -491,6 +491,11 @@ function writeResponse(response) {
 
         response.project.item_count = app.project.numItems;
         response.project.composition_count = countCompositions(app.project);
+        try {
+            response.project.file_path = app.project.file ? String(app.project.file.fsName) : null;
+        } catch (projectFileError) {
+            response.project.file_path = null;
+        }
 
         var item = app.project.activeItem;
         if (!item || !(item instanceof CompItem)) {
