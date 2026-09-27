@@ -6,7 +6,6 @@ on:
       - "ae_reader/**"
       - "verifier/**"
       - "fixtures/**"
-      - "fixtures/**"
       - "tests/**"
       - "requirements.txt"
       - "pilot_10_skills.yaml"
@@ -15,6 +14,7 @@ on:
     paths:
       - "ae_reader/**"
       - "verifier/**"
+      - "fixtures/**"
       - "tests/**"
       - "requirements.txt"
       - "pilot_10_skills.yaml"
