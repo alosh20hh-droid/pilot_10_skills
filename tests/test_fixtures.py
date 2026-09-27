@@ -337,6 +337,14 @@ class FixtureMaterializerTests(unittest.TestCase):
                     "FX-002-COMP-EMPTY",
                     acknowledge_disposable_project=True,
                 )
+            self.assertFalse(
+                repository.canonical_path("FX-002-COMP-EMPTY").exists(),
+                "failed certification must not leave an untrusted canonical .aep",
+            )
+            self.assertFalse(
+                repository.certification_path("FX-002-COMP-EMPTY").exists(),
+                "failed certification must not leave a certification record",
+            )
 
 
 if __name__ == "__main__":
