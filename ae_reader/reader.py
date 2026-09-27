@@ -318,10 +318,12 @@ class AfterEffectsReadOnlyObserver:
             if resolved != expected.resolve():
                 return
 
+            request_id = record["request_id"]
             try:
                 shutil.rmtree(resolved)
             finally:
                 record["status"] = "CLEANED"
+                self._request_registry.pop(request_id, None)
 
 
 __all__ = ["AfterEffectsReadOnlyObserver"]
