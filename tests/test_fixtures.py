@@ -43,7 +43,7 @@ def synthetic_evidence(contract, fixture_id, project_path, *, run_id="cert-run",
             "schema_version": contract.expected_reader_schema_version(),
             "supported_capabilities": list(
                 contract.ae_reader_contract["known_capability_ids"]
-            ) + ["project.file_identity"],
+            ),
         },
         "state": state,
         "errors": [],
