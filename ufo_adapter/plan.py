@@ -38,6 +38,17 @@ class UFOPlan:
     def sha256(self) -> str:
         return hashlib.sha256(self.serialized_bytes()).hexdigest()
 
+    def bind_object(self, object_value: str) -> "UFOPlan":
+        if not isinstance(object_value, str) or not object_value.strip():
+            raise UFOPlanError("bound UFO object must be a non-empty string")
+        payload = self.to_dict()
+        payload["object"] = object_value
+        return UFOPlan(
+            skill_id=self.skill_id,
+            fixture_id=self.fixture_id,
+            payload=payload,
+        )
+
 
 def compile_skill_plan(contract: PilotContract, skill_id: str) -> UFOPlan:
     skill = contract.skill(skill_id)
