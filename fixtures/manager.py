@@ -45,6 +45,7 @@ class FixtureRepository:
         canonical_dir: Optional[str | Path] = None,
         certification_dir: Optional[str | Path] = None,
         run_dir: Optional[str | Path] = None,
+        run_registry_dir: Optional[str | Path] = None,
     ) -> None:
         root = Path(repo_root or Path(__file__).resolve().parents[1])
         self.contract = contract
@@ -59,11 +60,15 @@ class FixtureRepository:
         self.run_dir = Path(
             run_dir or (root / "fixtures" / "runs")
         )
+        self.run_registry_dir = Path(
+            run_registry_dir or (root / "fixtures" / "run_registry")
+        )
 
     def ensure_layout(self) -> None:
         self.canonical_dir.mkdir(parents=True, exist_ok=True)
         self.certification_dir.mkdir(parents=True, exist_ok=True)
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.run_registry_dir.mkdir(parents=True, exist_ok=True)
 
     def canonical_path(self, fixture_id: str) -> Path:
         if fixture_id not in self.contract.fixtures:
@@ -288,11 +293,36 @@ class FixtureRepository:
         run_key = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
         destination_dir = self.run_dir / run_key
         destination = destination_dir / f"{fixture_id}.aep"
+        registry_path = self.run_registry_dir / f"{run_key}.json"
 
-        if destination_dir.exists():
+        if destination_dir.exists() or registry_path.exists():
             raise FixtureCertificationError(
-                "run workspace already exists; run_id reuse is forbidden"
+                "run_id was already used; pilot run identity reuse is forbidden"
             )
+
+        self.ensure_layout()
+        try:
+            handle = os.open(
+                registry_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            )
+            with os.fdopen(handle, "w", encoding="utf-8") as registry_file:
+                json.dump(
+                    {
+                        "run_id": run_id,
+                        "run_key": run_key,
+                        "fixture_id": fixture_id,
+                        "reserved_at": time.time(),
+                    },
+                    registry_file,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+        except FileExistsError as exc:
+            raise FixtureCertificationError(
+                "run_id was already used; pilot run identity reuse is forbidden"
+            ) from exc
 
         destination_dir.mkdir(parents=True, exist_ok=False)
         temporary = destination.with_suffix(".tmp")
@@ -307,6 +337,10 @@ class FixtureRepository:
             os.replace(temporary, destination)
         except Exception:
             shutil.rmtree(destination_dir, ignore_errors=True)
+            try:
+                registry_path.unlink()
+            except FileNotFoundError:
+                pass
             raise
 
         return {
