@@ -107,6 +107,9 @@ comparison_policy:
   rule: "Assertions must declare an operator. Numeric equality uses the declared tolerance instead of raw floating-point equality."
 
 state_schema:
+  project:
+    composition_count: "integer"
+    file_path: "string|null"
   active_comp:
     name: "string"
     width: "number"
@@ -154,7 +157,7 @@ state_schema:
               value: "number|string|boolean|null"
 
 ae_reader_contract:
-  expected_reader_version: "2.0.0"
+  expected_reader_version: "2.1.0"
   expected_schema_version: 2
   freshness_requirements:
     - "Every response contains run_id matching the active run."
@@ -168,6 +171,7 @@ ae_reader_contract:
     - "supported_capabilities"
   known_capability_ids:
     - "project.composition_count"
+    - "project.file_identity"
     - "composition.identity"
     - "composition.dimensions"
     - "composition.duration"
