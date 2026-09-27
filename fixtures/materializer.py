@@ -56,43 +56,55 @@ class FixtureMaterializer:
             acknowledge_disposable_project=acknowledge_disposable_project,
         )
 
-        certification_run_id = (
-            f"fixture-cert-{fixture_id}-{int(time.time() * 1000)}"
-        )
-        evidence = self.reader.read_pilot_state(
-            certification_run_id,
-            timeout=max(10.0, timeout),
-        )
-        request_id = evidence.get("request_id")
-        if not isinstance(request_id, str) or not request_id:
-            raise RuntimeError("AE Reader certification response is missing request_id")
+        try:
+            certification_run_id = (
+                f"fixture-cert-{fixture_id}-{int(time.time() * 1000)}"
+            )
+            evidence = self.reader.read_pilot_state(
+                certification_run_id,
+                timeout=max(10.0, timeout),
+            )
+            request_id = evidence.get("request_id")
+            if not isinstance(request_id, str) or not request_id:
+                raise RuntimeError("AE Reader certification response is missing request_id")
 
-        # The reader is invoked only after the builder has confirmed the file
-        # was saved. Bind certification freshness to the save boundary itself.
-        save_boundary = build_result.get("saved_at")
-        if not isinstance(save_boundary, (int, float)) or isinstance(save_boundary, bool):
-            save_boundary = build_result["finished_at"]
+            # The reader is invoked only after the builder has confirmed the file
+            # was saved. Bind certification freshness to the save boundary itself.
+            save_boundary = build_result.get("saved_at")
+            if not isinstance(save_boundary, (int, float)) or isinstance(save_boundary, bool):
+                save_boundary = build_result["finished_at"]
 
-        record = self.repository.certify(
-            fixture_id,
-            aep_path=output,
-            evidence=evidence,
-            expected_run_id=certification_run_id,
-            expected_request_id=request_id,
-            min_captured_at=float(save_boundary),
-            builder_result=build_result,
-        )
+            record = self.repository.certify(
+                fixture_id,
+                aep_path=output,
+                evidence=evidence,
+                expected_run_id=certification_run_id,
+                expected_request_id=request_id,
+                min_captured_at=float(save_boundary),
+                builder_result=build_result,
+            )
 
-        return {
-            "fixture_id": fixture_id,
-            "status": "CERTIFIED",
-            "canonical_path": str(output.resolve()),
-            "sha256": record["sha256"],
-            "size_bytes": record["size_bytes"],
-            "reader_request_id": request_id,
-            "certification_run_id": certification_run_id,
-            "captured_at": evidence.get("captured_at"),
-        }
+            return {
+                "fixture_id": fixture_id,
+                "status": "CERTIFIED",
+                "canonical_path": str(output.resolve()),
+                "sha256": record["sha256"],
+                "size_bytes": record["size_bytes"],
+                "reader_request_id": request_id,
+                "certification_run_id": certification_run_id,
+                "captured_at": evidence.get("captured_at"),
+            }
+        except Exception:
+            # This call created the file from a previously absent path. If live
+            # certification fails, keep no untrusted canonical binary behind.
+            try:
+                if output.exists():
+                    output.unlink()
+            finally:
+                certification = self.repository.certification_path(fixture_id)
+                if certification.exists():
+                    certification.unlink()
+            raise
 
     def materialize_all(
         self,
@@ -106,7 +118,26 @@ class FixtureMaterializer:
             )
 
         results: List[Dict[str, Any]] = []
+        self.repository.ensure_layout()
         for fixture_id in self.contract.fixtures:
+            canonical = self.repository.canonical_path(fixture_id)
+            if canonical.exists():
+                try:
+                    record = self.repository.verify_canonical(fixture_id)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"{fixture_id} already has an uncertified or invalid canonical file; "
+                        f"remove/reconcile it before resuming: {exc}"
+                    ) from exc
+                results.append({
+                    "fixture_id": fixture_id,
+                    "status": "CERTIFIED_EXISTING",
+                    "canonical_path": str(canonical.resolve()),
+                    "sha256": record["sha256"],
+                    "size_bytes": record["size_bytes"],
+                })
+                continue
+
             results.append(
                 self.materialize_one(
                     fixture_id,
