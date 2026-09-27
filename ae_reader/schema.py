@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Any, Dict, Iterable, List, Optional
 
 READER_VERSION = "2.1.0"
@@ -25,7 +26,10 @@ def _number_or_none(value: Any, field_name: str) -> Optional[float]:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"invalid {field_name}")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"non-finite {field_name}")
+    return number
 
 
 def _int_or_none(value: Any, field_name: str) -> Optional[int]:
