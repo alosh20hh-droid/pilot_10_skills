@@ -159,11 +159,25 @@ function buildFromRequiredState(requiredState) {
      */
     for (var i = layers.length - 1; i >= 0; i--) {
         var layerSpec = layers[i];
-        var layer = createTextLayer(comp, layerSpec);
-        if (layerSpec.index !== undefined && layerSpec.index !== null) {
+        createTextLayer(comp, layerSpec);
+    }
+
+    /* Validate final top-to-bottom order after all insertions are complete. */
+    for (var j = 0; j < layers.length; j++) {
+        var expectedLayer = layers[j];
+        var actualLayer = comp.layer(j + 1);
+        requireValue(
+            actualLayer !== null,
+            "Expected layer missing at index " + String(j + 1)
+        );
+        requireValue(
+            String(actualLayer.name) === String(expectedLayer.name),
+            "Layer order mismatch at index " + String(j + 1)
+        );
+        if (expectedLayer.index !== undefined && expectedLayer.index !== null) {
             requireValue(
-                layer.index === Number(layerSpec.index),
-                "Layer index mismatch while constructing " + String(layerSpec.name)
+                actualLayer.index === Number(expectedLayer.index),
+                "Declared layer index mismatch for " + String(expectedLayer.name)
             );
         }
     }
