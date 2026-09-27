@@ -1,0 +1,31 @@
+{
+  "reader_version": "2.0.0",
+  "schema_version": 2,
+  "supported_capabilities": [
+    "application.version",
+    "application.language",
+    "project.composition_count",
+    "composition.identity",
+    "composition.dimensions",
+    "composition.duration",
+    "composition.frame_rate",
+    "composition.current_time",
+    "layer.list",
+    "layer.identity",
+    "layer.type",
+    "layer.source_text",
+    "layer.index",
+    "layer.timing",
+    "layer.selection",
+    "layer.transform.position",
+    "layer.transform.scale",
+    "layer.transform.opacity",
+    "property.keyframes.count",
+    "property.keyframes.time",
+    "property.keyframes.value",
+    "effect.list",
+    "effect.identity.stable_id",
+    "effect.property.identity",
+    "effect.property.value"
+  ]
+}
