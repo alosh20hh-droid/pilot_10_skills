@@ -17,6 +17,7 @@ from ae_reader.contract_check import check_contract
 
 REQUIRED_PILOT_CAPABILITIES = {
     "project.composition_count",
+    "project.file_identity",
     "composition.identity",
     "composition.dimensions",
     "composition.duration",
@@ -63,6 +64,7 @@ def sample_response(*, request_id="req-1", run_id="run-1", captured_at=None):
         "project": {
             "item_count": 1,
             "composition_count": 1,
+            "file_path": r"C:\\fixtures\\FX-TEST.aep",
         },
         "composition": {
             "available": True,
@@ -157,6 +159,7 @@ class SchemaTests(unittest.TestCase):
         state = snapshot.to_pilot_state()
 
         self.assertEqual(state["project"]["composition_count"], 1)
+        self.assertEqual(state["project"]["file_path"], r"C:\\fixtures\\FX-TEST.aep")
         self.assertEqual(state["active_comp"]["current_time_frame"], 30)
         self.assertEqual(state["layers"][0]["transform"]["position"], {"x": 960.0, "y": 540.0})
         self.assertEqual(state["layers"][0]["transform"]["scale"], {"x_percent": 125.0, "y_percent": 125.0})
