@@ -73,6 +73,7 @@ def _verify_bundle(verifier: DeterministicVerifier, bundle: Dict[str, Any]) -> D
     required = [
         "skill_id",
         "run_id",
+        "pre_request_id",
         "run_started_at",
         "last_action_at",
         "environment",
@@ -82,6 +83,8 @@ def _verify_bundle(verifier: DeterministicVerifier, bundle: Dict[str, Any]) -> D
     missing = [key for key in required if key not in bundle]
     if missing:
         raise SystemExit("verification bundle missing fields: " + ", ".join(missing))
+    if bool(bundle.get("execution_completed")) and not bundle.get("post_request_id"):
+        raise SystemExit("verification bundle requires post_request_id after completed execution")
 
     preflight = verifier.verify_preflight(
         skill_id=str(bundle["skill_id"]),
