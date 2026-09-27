@@ -107,13 +107,13 @@ This is applied only inside the temporary execution worktree.
 For every run the adapter creates:
 
 \`\`\`text
-config/ufo/system_pilot.yaml
+config/ufo/system_test.yaml
 \`\`\`
 
 and starts UFO with:
 
 \`\`\`text
-UFO_ENV=pilot
+UFO_ENV=test
 \`\`\`
 
 The overlay enforces:
