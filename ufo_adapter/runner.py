@@ -72,6 +72,14 @@ def _safe_name(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 class UFOMeasuredRunner:
     def __init__(
         self,
@@ -127,13 +135,48 @@ class UFOMeasuredRunner:
             "INFO",
         ]
 
+    def _bind_fixture(
+        self,
+        *,
+        plan: UFOPlan,
+        fixture_path: str | Path,
+        fixture_sha256: str,
+    ) -> tuple[UFOPlan, Path]:
+        path = Path(fixture_path).expanduser().resolve()
+        if not path.is_file():
+            raise UFOExecutionError(f"disposable fixture file not found: {path}")
+        if path.suffix.lower() != ".aep":
+            raise UFOExecutionError("measured UFO execution requires a .aep fixture")
+        if path.name != f"{plan.fixture_id}.aep":
+            raise UFOExecutionError(
+                "fixture filename does not match the skill's declared fixture_id"
+            )
+        if not isinstance(fixture_sha256, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{64}",
+            fixture_sha256,
+        ):
+            raise UFOExecutionError("fixture_sha256 must be a 64-character SHA-256 hex string")
+        actual_hash = _sha256_file(path)
+        if actual_hash.lower() != fixture_sha256.lower():
+            raise UFOExecutionError(
+                "disposable fixture hash does not match the certified run-copy hash"
+            )
+        return plan.bind_object(str(path)), path
+
     def prepare_run(
         self,
         *,
         run_id: str,
         plan: UFOPlan,
+        fixture_path: str | Path,
+        fixture_sha256: str,
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
+        execution_plan, bound_fixture_path = self._bind_fixture(
+            plan=plan,
+            fixture_path=fixture_path,
+            fixture_sha256=fixture_sha256,
+        )
 
         run_key = _safe_name(run_id)
         run_dir = self.output_root / run_key
@@ -144,15 +187,18 @@ class UFOMeasuredRunner:
         plan_path = run_dir / "plan.json"
         metadata_path = run_dir / "metadata.json"
 
-        plan_path.write_bytes(plan.serialized_bytes())
+        plan_path.write_bytes(execution_plan.serialized_bytes())
 
         plan_hash = hashlib.sha256(plan_path.read_bytes()).hexdigest()
-        if plan_hash != plan.sha256():
+        if plan_hash != execution_plan.sha256():
             raise UFOExecutionError("serialized UFO plan hash mismatch")
         metadata = {
             "run_id": run_id,
             "skill_id": plan.skill_id,
             "fixture_id": plan.fixture_id,
+            "fixture_path": str(bound_fixture_path),
+            "fixture_sha256": fixture_sha256.lower(),
+            "source_plan_sha256": plan.sha256(),
             "plan_sha256": plan_hash,
             "ufo_required_commit": self.lock.get("commit"),
             "ufo_mode": "follower",
@@ -176,8 +222,15 @@ class UFOMeasuredRunner:
         *,
         run_id: str,
         plan: UFOPlan,
+        fixture_path: str | Path,
+        fixture_sha256: str,
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
+        execution_plan, bound_fixture_path = self._bind_fixture(
+            plan=plan,
+            fixture_path=fixture_path,
+            fixture_sha256=fixture_sha256,
+        )
         run_key = _safe_name(run_id)
         plan_path = self.output_root / run_key / "plan.json"
         command = self.build_command(
@@ -188,7 +241,10 @@ class UFOMeasuredRunner:
             "run_id": run_id,
             "run_key": run_key,
             "plan_path": str(plan_path),
-            "plan_sha256": plan.sha256(),
+            "source_plan_sha256": plan.sha256(),
+            "plan_sha256": execution_plan.sha256(),
+            "fixture_path": str(bound_fixture_path),
+            "fixture_sha256": fixture_sha256.lower(),
             "command": command,
         }
 
@@ -197,6 +253,8 @@ class UFOMeasuredRunner:
         *,
         run_id: str,
         plan: UFOPlan,
+        fixture_path: str | Path,
+        fixture_sha256: str,
         arm_measured_execution: bool = False,
         timeout: Optional[float] = None,
     ) -> UFOExecutionResult:
@@ -206,7 +264,12 @@ class UFOMeasuredRunner:
             )
 
         checkout = self.validate_environment()
-        prepared = self.prepare_run(run_id=run_id, plan=plan)
+        prepared = self.prepare_run(
+            run_id=run_id,
+            plan=plan,
+            fixture_path=fixture_path,
+            fixture_sha256=fixture_sha256,
+        )
 
         run_dir: Path = prepared["run_dir"]
         stdout_path = run_dir / "stdout.log"
