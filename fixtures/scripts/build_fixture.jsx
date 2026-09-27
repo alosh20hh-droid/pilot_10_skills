@@ -21,11 +21,23 @@ function readJsonFile(path) {
 }
 
 function writeJsonFile(path, value) {
-    var file = new File(path);
-    file.encoding = "UTF-8";
-    if (!file.open("w")) throw new Error("Unable to write: " + path);
-    file.write(JSON.stringify(value));
-    file.close();
+    var finalFile = new File(path);
+    var temporary = new File(path + ".tmp");
+
+    if (temporary.exists) {
+        temporary.remove();
+    }
+    temporary.encoding = "UTF-8";
+    if (!temporary.open("w")) throw new Error("Unable to write temporary result: " + path);
+    temporary.write(JSON.stringify(value));
+    temporary.close();
+
+    if (finalFile.exists && !finalFile.remove()) {
+        throw new Error("Unable to replace existing result: " + path);
+    }
+    if (!temporary.rename(finalFile.name)) {
+        throw new Error("Unable to publish result atomically: " + path);
+    }
 }
 
 function requireValue(condition, message) {
