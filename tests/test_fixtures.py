@@ -173,6 +173,26 @@ class FixtureRepositoryTests(unittest.TestCase):
         verified = self.repository.verify_canonical("FX-004-POSITION-READY")
         self.assertEqual(verified["sha256"], record["sha256"])
 
+    def test_missing_project_identity_capability_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        evidence["capabilities"]["supported_capabilities"] = [
+            item
+            for item in evidence["capabilities"]["supported_capabilities"]
+            if item != "project.file_identity"
+        ]
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+            )
+
     def test_wrong_project_file_identity_is_rejected(self):
         fixture_id = "FX-004-POSITION-READY"
         path = self.repository.canonical_path(fixture_id)
