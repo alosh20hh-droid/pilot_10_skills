@@ -253,12 +253,15 @@ class AEEffectPropertySnapshot:
         children_raw = value.get("properties") or []
         if not isinstance(keys_raw, list) or not isinstance(children_raw, list):
             raise ValueError("invalid effect property containers")
+        keys = [AEPropertyKey.from_dict(item) for item in keys_raw]
+        if len(keys) != num_keys:
+            raise ValueError("effect property key count does not match keys")
         return cls(
             name=name,
             match_name=match_name,
             value=_primitive(value.get("value")),
             num_keys=num_keys,
-            keys=[AEPropertyKey.from_dict(item) for item in keys_raw],
+            keys=keys,
             properties=[cls.from_dict(item) for item in children_raw],
         )
 
@@ -592,6 +595,8 @@ class AEStateSnapshot:
         errors = value["errors"]
         if not isinstance(application, dict) or not isinstance(layers_raw, list) or not isinstance(errors, list):
             raise ValueError("invalid response containers")
+        if not all(isinstance(item, str) for item in errors):
+            raise ValueError("response errors must contain strings only")
         for optional_identity in ("session_id", "lesson_id", "step_id"):
             if value.get(optional_identity) is not None and not isinstance(value.get(optional_identity), str):
                 raise ValueError(f"invalid {optional_identity}")
@@ -607,7 +612,7 @@ class AEStateSnapshot:
             project=AEProjectSnapshot.from_dict(value["project"]),
             composition=AECompositionSnapshot.from_dict(value["composition"]),
             layers=[AELayerSnapshot.from_dict(item) for item in layers_raw],
-            errors=[str(item) for item in errors],
+            errors=list(errors),
             session_id=value.get("session_id"),
             lesson_id=value.get("lesson_id"),
             step_id=value.get("step_id"),
