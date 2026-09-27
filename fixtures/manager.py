@@ -419,10 +419,10 @@ class FixtureRepository:
                 "run_id was already used; pilot run identity reuse is forbidden"
             ) from exc
 
-        destination_dir.mkdir(parents=True, exist_ok=False)
         temporary = destination.with_suffix(".tmp")
 
         try:
+            destination_dir.mkdir(parents=True, exist_ok=False)
             shutil.copy2(source, temporary)
             copied_hash = sha256_file(temporary)
             if copied_hash != record["sha256"]:
