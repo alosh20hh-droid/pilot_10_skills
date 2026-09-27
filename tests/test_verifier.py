@@ -8,6 +8,7 @@ from verifier import (
     evaluate_assertions,
     resolve_path,
     run_calibration,
+    run_pilot_calibration,
 )
 
 
@@ -459,12 +460,55 @@ class AggregateTests(unittest.TestCase):
 
 
 class CalibrationTests(unittest.TestCase):
-    def test_all_required_controls_behave_exactly(self):
+    def test_software_self_calibration_behaves_exactly_but_does_not_satisfy_pilot_gate(self):
         result = run_calibration(contract())
         self.assertTrue(result["passed"])
+        self.assertFalse(result["satisfies_pilot_gate"])
         self.assertEqual(result["controls"]["CAL-POSITIVE"]["actual"], "PASS")
         self.assertEqual(result["controls"]["CAL-NEGATIVE"]["actual"], "VERIFICATION_FAILED")
         self.assertEqual(result["controls"]["CAL-STALE"]["actual"], "INCONCLUSIVE")
+
+    def test_pilot_calibration_with_fresh_canonical_fixture_evidence_satisfies_gate(self):
+        c = contract()
+        state = fixture_state("AE-PILOT-002")
+        evidence = evidence_for(
+            state,
+            run_id="cal-live-run",
+            request_id="cal-live-request",
+            captured_at=20,
+        )
+        result = run_pilot_calibration(
+            c,
+            evidence=evidence,
+            fixture_id="FX-002-COMP-EMPTY",
+            expected_run_id="cal-live-run",
+            expected_request_id="cal-live-request",
+            min_captured_at=10,
+        )
+        self.assertTrue(result["passed"])
+        self.assertTrue(result["satisfies_pilot_gate"])
+        self.assertEqual(result["controls"]["CAL-POSITIVE"]["actual"], "PASS")
+        self.assertEqual(result["controls"]["CAL-NEGATIVE"]["actual"], "VERIFICATION_FAILED")
+        self.assertEqual(result["controls"]["CAL-STALE"]["actual"], "INCONCLUSIVE")
+
+    def test_pilot_calibration_rejects_stale_canonical_evidence(self):
+        c = contract()
+        evidence = evidence_for(
+            fixture_state("AE-PILOT-002"),
+            run_id="cal-live-run",
+            request_id="cal-live-request",
+            captured_at=5,
+        )
+        result = run_pilot_calibration(
+            c,
+            evidence=evidence,
+            fixture_id="FX-002-COMP-EMPTY",
+            expected_run_id="cal-live-run",
+            expected_request_id="cal-live-request",
+            min_captured_at=10,
+        )
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["satisfies_pilot_gate"])
 
 
 if __name__ == "__main__":
