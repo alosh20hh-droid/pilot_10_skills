@@ -19,8 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = PilotContract.load(ROOT / "pilot_10_skills.yaml")
 
 
-def make_fixture(root: Path, fixture_id: str):
-    path = root / f"{fixture_id}.aep"
+def make_fixture(root: Path, fixture_id: str, run_id: str = "run-1"):
+    run_key = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
+    directory = root / run_key
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{fixture_id}.aep"
     payload = ("fixture:" + fixture_id).encode("utf-8")
     path.write_bytes(payload)
     return path, hashlib.sha256(payload).hexdigest()
@@ -138,7 +141,9 @@ class UFORunnerTests(unittest.TestCase):
                 output_root=root / "runs",
             )
             plan = compile_skill_plan(CONTRACT, "AE-PILOT-003")
-            fixture, fixture_hash = make_fixture(root, plan.fixture_id)
+            fixture, fixture_hash = make_fixture(
+                root, plan.fixture_id, "unique-run"
+            )
             prepared = runner.prepare_run(
                 run_id="unique-run",
                 plan=plan,
@@ -168,7 +173,9 @@ class UFORunnerTests(unittest.TestCase):
                 output_root=root / "runs",
             )
             plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
-            fixture, fixture_hash = make_fixture(root, plan.fixture_id)
+            fixture, fixture_hash = make_fixture(
+                root, plan.fixture_id, "preview-run-1"
+            )
             preview = runner.preview_command(
                 run_id="preview-run-1",
                 plan=plan,
@@ -206,13 +213,34 @@ class UFORunnerTests(unittest.TestCase):
             root = Path(temp)
             runner = UFOMeasuredRunner(root, output_root=root / "runs")
             plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
-            fixture, _ = make_fixture(root, plan.fixture_id)
+            fixture, _ = make_fixture(
+                root, plan.fixture_id, "run-hash-check"
+            )
             with self.assertRaises(UFOExecutionError):
                 runner.prepare_run(
                     run_id="run-hash-check",
                     plan=plan,
                     fixture_path=fixture,
                     fixture_sha256="0" * 64,
+                )
+
+    def test_canonical_or_non_run_workspace_fixture_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(root, output_root=root / "runs")
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            canonical_dir = root / "fixtures" / "canonical"
+            canonical_dir.mkdir(parents=True)
+            fixture = canonical_dir / f"{plan.fixture_id}.aep"
+            payload = b"fixture"
+            fixture.write_bytes(payload)
+            fixture_hash = hashlib.sha256(payload).hexdigest()
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id="run-canonical-check",
+                    plan=plan,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
                 )
 
     def test_wrong_fixture_filename_is_rejected(self):
