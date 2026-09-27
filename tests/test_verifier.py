@@ -210,6 +210,48 @@ class PreflightTests(unittest.TestCase):
         self.assertIsNone(decision.run_status)
         self.assertTrue(decision.assertion_results.passed)
 
+
+    def test_missing_pre_request_id_blocks(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id=None,
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.run_status, "BLOCKED")
+        self.assertEqual(decision.reason_code, "REQUEST_ID_REQUIRED")
+
+    def test_empty_run_id_blocks(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(fixture_state("AE-PILOT-004"), captured_at=20),
+            expected_run_id="",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "RUN_ID_REQUIRED")
+
+    def test_reader_not_ok_blocks_preflight(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(
+                fixture_state("AE-PILOT-004"),
+                captured_at=20,
+                status="INVALID_RESPONSE",
+            ),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "READER_NOT_OK")
+
     def test_missing_capability_blocks_before_execution(self):
         state = fixture_state("AE-PILOT-004")
         evidence = evidence_for(
@@ -348,6 +390,41 @@ class PostVerificationTests(unittest.TestCase):
             last_action_at=30,
         )
         self.assertEqual(decision.run_status, "PASS")
+
+
+    def test_missing_post_request_id_is_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(state, request_id="post-1", captured_at=40),
+            expected_run_id="run-1",
+            expected_request_id=None,
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "REQUEST_ID_REQUIRED")
+
+    def test_reader_not_ok_after_execution_is_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                request_id="post-1",
+                captured_at=40,
+                status="INVALID_RESPONSE",
+            ),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "READER_NOT_OK")
 
     def test_wrong_post_state_is_verification_failed(self):
         state = fixture_state("AE-PILOT-004")
