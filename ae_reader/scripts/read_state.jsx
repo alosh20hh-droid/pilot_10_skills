@@ -450,14 +450,14 @@ function writeResponse(response) {
 
     var response = {
         schema_version: 2,
-        reader_version: "2.0.0",
+        reader_version: "2.1.0",
         status: "INVALID_RESPONSE",
         request_id: "",
         run_id: "",
         captured_at: null,
         application: readApplicationInfo(),
         capabilities: {
-            reader_version: "2.0.0",
+            reader_version: "2.1.0",
             schema_version: 2,
             supported_capabilities: []
         },
