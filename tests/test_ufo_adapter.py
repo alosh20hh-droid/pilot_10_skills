@@ -115,8 +115,33 @@ class UFORunnerTests(unittest.TestCase):
                 prepared["plan_path"].read_text(encoding="utf-8")
             )
             self.assertEqual(payload["steps"], plan.to_dict()["steps"])
+            self.assertEqual(prepared["plan_sha256"], plan.sha256())
             with self.assertRaises(UFOExecutionError):
                 runner.prepare_run(run_id="unique-run", plan=plan)
+
+    def test_command_preview_does_not_consume_run_id(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(
+                root,
+                output_root=root / "runs",
+            )
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            preview = runner.preview_command(run_id="preview-run-1", plan=plan)
+            self.assertFalse((root / "runs").exists())
+            self.assertEqual(preview["plan_sha256"], plan.sha256())
+            prepared = runner.prepare_run(run_id="preview-run-1", plan=plan)
+            self.assertTrue(prepared["plan_path"].is_file())
+
+    def test_unsafe_run_id_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runner = UFOMeasuredRunner(
+                temp,
+                output_root=Path(temp) / "runs",
+            )
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(run_id="../unsafe", plan=plan)
 
     @mock.patch("ufo_adapter.runner.platform.system", return_value="Linux")
     def test_non_windows_execution_environment_is_rejected(self, _mock_system):
