@@ -378,6 +378,28 @@ class DeterministicVerifier:
         runtime = dict(runtime or {})
         skill = self.contract.skill(skill_id)
 
+        if not isinstance(expected_run_id, str) or not expected_run_id:
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "RUN_ID_REQUIRED",
+                "a non-empty run_id is required before execution",
+            )
+        if not isinstance(expected_request_id, str) or not expected_request_id:
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "REQUEST_ID_REQUIRED",
+                "a non-empty pre-state request_id is required before execution",
+            )
+        if not _is_number(run_started_at):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "RUN_START_TIMESTAMP_REQUIRED",
+                "a numeric run start timestamp is required before execution",
+            )
+
         environment_ok, env_code, env_reason, env_details = check_environment(
             environment,
             self.contract.environment_contract,
@@ -548,6 +570,19 @@ class DeterministicVerifier:
                 "EXECUTION_FAILED",
                 "EXECUTION_DID_NOT_COMPLETE",
                 "measured UI interaction sequence did not complete",
+            )
+
+        if not isinstance(expected_request_id, str) or not expected_request_id:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "REQUEST_ID_REQUIRED",
+                "a non-empty post-state request_id is required for verification",
+            )
+        if not _is_number(last_action_at):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "LAST_ACTION_TIMESTAMP_REQUIRED",
+                "a numeric last-action timestamp is required for freshness verification",
             )
 
         if evidence is None:
