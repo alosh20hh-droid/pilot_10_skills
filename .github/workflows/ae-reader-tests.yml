@@ -6,6 +6,7 @@ on:
       - "ae_reader/**"
       - "verifier/**"
       - "fixtures/**"
+      - "ufo_adapter/**"
       - "tests/**"
       - "requirements.txt"
       - "pilot_10_skills.yaml"
@@ -15,6 +16,7 @@ on:
       - "ae_reader/**"
       - "verifier/**"
       - "fixtures/**"
+      - "ufo_adapter/**"
       - "tests/**"
       - "requirements.txt"
       - "pilot_10_skills.yaml"
@@ -40,5 +42,7 @@ jobs:
         run: python -m verifier.cli calibrate
       - name: Fixture specification validation
         run: python -m fixtures.cli validate-specs
+      - name: UFO plan validation
+        run: python -m ufo_adapter.cli validate-plans
       - name: Unit tests
         run: python -m unittest discover -s tests -v
