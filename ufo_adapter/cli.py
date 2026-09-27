@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,36 @@ def _print(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
 
 
+
+def _resolve_ufo_checkout(value: str | None) -> str:
+    candidates = []
+    if value:
+        candidates.append(Path(value).expanduser())
+    env_root = os.environ.get("UFO_ROOT")
+    if env_root:
+        candidates.append(Path(env_root).expanduser())
+    home = Path.home()
+    candidates.extend([
+        home / "UFO",
+        home / "Desktop" / "UFO",
+        home / "Documents" / "UFO",
+    ])
+
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        key = str(resolved).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if (resolved / "ufo" / "__main__.py").is_file():
+            return str(resolved)
+
+    raise UFOExecutionError(
+        "existing UFO checkout was not found; pass --ufo-checkout or set UFO_ROOT"
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="UFO adapter for the AE pilot")
     parser.add_argument("--contract", default=str(DEFAULT_CONTRACT))
@@ -37,17 +68,17 @@ def build_parser() -> argparse.ArgumentParser:
     compile_all.add_argument("--output-dir", required=True)
 
     check = sub.add_parser("validate-checkout", help="Validate a local UFO checkout against the pinned upstream commit")
-    check.add_argument("--ufo-checkout", required=True)
+    check.add_argument("--ufo-checkout", default=None)
 
     command = sub.add_parser("command", help="Print the exact locked UFO command for one skill without executing it")
-    command.add_argument("--ufo-checkout", required=True)
+    command.add_argument("--ufo-checkout", default=None)
     command.add_argument("--skill-id", required=True)
     command.add_argument("--run-id", required=True)
     command.add_argument("--fixture-path", required=True)
     command.add_argument("--fixture-sha256", required=True)
 
     execute = sub.add_parser("execute", help="Run one measured UFO Follower Mode plan")
-    execute.add_argument("--ufo-checkout", required=True)
+    execute.add_argument("--ufo-checkout", default=None)
     execute.add_argument("--skill-id", required=True)
     execute.add_argument("--run-id", required=True)
     execute.add_argument("--fixture-path", required=True)
@@ -110,13 +141,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "validate-checkout":
-            result = inspect_checkout(args.ufo_checkout)
+            result = inspect_checkout(_resolve_ufo_checkout(args.ufo_checkout))
             _print(result)
             return 0 if result["valid"] else 2
 
         if args.command == "command":
             plan = compile_skill_plan(contract, args.skill_id)
-            runner = UFOMeasuredRunner(args.ufo_checkout)
+            runner = UFOMeasuredRunner(_resolve_ufo_checkout(args.ufo_checkout))
             checkout = runner.validate_environment()
             preview = runner.preview_command(
                 run_id=args.run_id,
@@ -136,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "execute":
             plan = compile_skill_plan(contract, args.skill_id)
-            runner = UFOMeasuredRunner(args.ufo_checkout)
+            runner = UFOMeasuredRunner(_resolve_ufo_checkout(args.ufo_checkout))
             result = runner.execute(
                 run_id=args.run_id,
                 plan=plan,
