@@ -14,6 +14,7 @@ from verifier import (
     run_pilot_calibration,
 )
 from verifier.contract import ContractError
+from verifier.cli import _verify_bundle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -431,6 +432,23 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(decision.run_status, "BLOCKED")
         self.assertEqual(decision.reason_code, "ENVIRONMENT_MISMATCH")
 
+
+    def test_non_finite_capture_timestamp_blocks(self):
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(
+                fixture_state("AE-PILOT-004"),
+                captured_at=float("nan"),
+            ),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            expected_ae_build="26.0-test",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "MALFORMED_EVIDENCE")
+
     def test_stale_pre_evidence_blocks(self):
         decision = self.verifier.verify_preflight(
             skill_id="AE-PILOT-004",
@@ -810,6 +828,36 @@ class PostVerificationTests(unittest.TestCase):
         )
         self.assertEqual(decision.run_status, "EXECUTION_FAILED")
 
+
+    def test_execution_completed_must_be_boolean(self):
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed="false",
+            evidence=None,
+            expected_run_id="run-1",
+            expected_request_id=None,
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "EXECUTION_FLAG_INVALID")
+
+    def test_ui_changed_without_independent_evidence_is_not_accepted(self):
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=False,
+            evidence=None,
+            expected_run_id="run-1",
+            expected_request_id=None,
+            last_action_at=30,
+            ui_change_evidence={
+                "route_changed": True,
+                "capability_still_exists": True,
+            },
+        )
+        self.assertEqual(decision.run_status, "EXECUTION_FAILED")
+
     def test_ui_changed_requires_explicit_evidence(self):
         decision = self.verifier.verify_post(
             skill_id="AE-PILOT-004",
@@ -826,6 +874,62 @@ class PostVerificationTests(unittest.TestCase):
             },
         )
         self.assertEqual(decision.run_status, "UI_CHANGED")
+
+
+
+class VerificationBundleTests(unittest.TestCase):
+    def setUp(self):
+        self.verifier = DeterministicVerifier(contract())
+
+    def _bundle(self):
+        return {
+            "skill_id": "AE-PILOT-004",
+            "run_id": "bundle-run",
+            "pre_request_id": "pre-bundle",
+            "post_request_id": "post-bundle",
+            "run_started_at": 10.0,
+            "last_action_at": 30.0,
+            "environment": {
+                **good_environment(),
+                "fixture_path": TEST_FIXTURE_PATH,
+            },
+            "pre_evidence": evidence_for(
+                fixture_state("AE-PILOT-004"),
+                run_id="bundle-run",
+                request_id="pre-bundle",
+                captured_at=20,
+            ),
+            "execution_completed": True,
+            "post_evidence": evidence_for(
+                {
+                    **fixture_state("AE-PILOT-004"),
+                    "layers": [
+                        {
+                            **fixture_state("AE-PILOT-004")["layers"][0],
+                            "transform": {
+                                "position": {"x": 960, "y": 540}
+                            },
+                        }
+                    ],
+                },
+                run_id="bundle-run",
+                request_id="post-bundle",
+                captured_at=40,
+            ),
+            "expected_ae_build": "26.0-test",
+        }
+
+    def test_bundle_rejects_string_boolean(self):
+        bundle = self._bundle()
+        bundle["execution_completed"] = "false"
+        with self.assertRaises(SystemExit):
+            _verify_bundle(self.verifier, bundle)
+
+    def test_bundle_rejects_non_finite_timestamps(self):
+        bundle = self._bundle()
+        bundle["last_action_at"] = float("nan")
+        with self.assertRaises(SystemExit):
+            _verify_bundle(self.verifier, bundle)
 
 
 class AggregateTests(unittest.TestCase):
