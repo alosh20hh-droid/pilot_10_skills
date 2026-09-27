@@ -66,9 +66,9 @@ def load_upstream_lock(path: str | Path | None = None) -> Dict[str, Any]:
     overlay = value.get("execution_overlay")
     if not isinstance(overlay, dict):
         raise UFOLockError("execution_overlay must be an object")
-    if overlay.get("environment") != "pilot":
-        raise UFOLockError("UFO execution overlay environment must be pilot")
-    if overlay.get("file") != "config/ufo/system_pilot.yaml":
+    if overlay.get("environment") != "test":
+        raise UFOLockError("UFO execution overlay environment must be test")
+    if overlay.get("file") != "config/ufo/system_test.yaml":
         raise UFOLockError("unexpected UFO execution overlay path")
     required_settings = overlay.get("required_settings")
     if not isinstance(required_settings, dict):
