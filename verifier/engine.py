@@ -583,6 +583,11 @@ class DeterministicVerifier:
             None,
             assertion_results=assertion_results,
             details={
+                "skill_id": skill_id,
+                "run_id": expected_run_id,
+                "pre_request_id": expected_request_id,
+                "run_started_at": float(run_started_at),
+                "pre_captured_at": float(evidence_check.details["captured_at"]),
                 "fixture_id": fixture.get("id"),
                 "runtime": runtime,
                 **env_details,
@@ -603,9 +608,8 @@ class DeterministicVerifier:
         blocked_reason: Optional[str] = None,
         ui_change_evidence: Optional[Dict[str, Any]] = None,
     ) -> RunDecision:
-        runtime = dict(runtime or {})
-        if preflight.details.get("runtime"):
-            runtime = {**preflight.details["runtime"], **runtime}
+        supplied_runtime = dict(runtime or {})
+        pinned_runtime = dict(preflight.details.get("runtime") or {})
 
         if not preflight.can_execute:
             return RunDecision(
@@ -615,6 +619,38 @@ class DeterministicVerifier:
                 assertion_results=preflight.assertion_results,
                 details=preflight.details,
             )
+
+        pinned_skill_id = preflight.details.get("skill_id")
+        if pinned_skill_id != skill_id:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "PREFLIGHT_SKILL_MISMATCH",
+                "post verification skill_id does not match the preflight skill",
+                details={"preflight_skill_id": pinned_skill_id, "post_skill_id": skill_id},
+            )
+
+        pinned_run_id = preflight.details.get("run_id")
+        if pinned_run_id != expected_run_id:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "PREFLIGHT_RUN_MISMATCH",
+                "post verification run_id does not match the preflight run",
+                details={"preflight_run_id": pinned_run_id, "post_run_id": expected_run_id},
+            )
+
+        runtime_conflicts = {
+            key: {"preflight": pinned_runtime[key], "post": value}
+            for key, value in supplied_runtime.items()
+            if key in pinned_runtime and pinned_runtime[key] != value
+        }
+        if runtime_conflicts:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "RUNTIME_CALIBRATION_CHANGED",
+                "runtime calibration changed after preflight",
+                details={"conflicts": runtime_conflicts},
+            )
+        runtime = pinned_runtime
 
         if blocked_reason:
             return RunDecision(
@@ -652,6 +688,25 @@ class DeterministicVerifier:
                 "INCONCLUSIVE",
                 "LAST_ACTION_TIMESTAMP_REQUIRED",
                 "a numeric last-action timestamp is required for freshness verification",
+            )
+
+        pre_captured_at = preflight.details.get("pre_captured_at")
+        run_started_at = preflight.details.get("run_started_at")
+        if (
+            not _is_number(pre_captured_at)
+            or not _is_number(run_started_at)
+            or float(last_action_at) <= float(pre_captured_at)
+            or float(last_action_at) <= float(run_started_at)
+        ):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "ACTION_TIMESTAMP_ORDER_INVALID",
+                "last measured action must be newer than both run start and pre-state capture",
+                details={
+                    "run_started_at": run_started_at,
+                    "pre_captured_at": pre_captured_at,
+                    "last_action_at": last_action_at,
+                },
             )
 
         if evidence is None:
