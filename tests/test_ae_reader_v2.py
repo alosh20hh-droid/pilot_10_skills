@@ -311,6 +311,16 @@ class SafetyTests(unittest.TestCase):
         for token in forbidden:
             self.assertNotIn(token, source, token)
 
+
+    def test_jsx_does_not_round_subframe_times_into_integer_frames(self):
+        source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
+        self.assertIn("Math.abs(rawFrame - nearestFrame) > 0.000001", source)
+        self.assertIn("return null;", source)
+        self.assertNotIn(
+            "return Math.round(timeSeconds / comp.frameDuration);",
+            source,
+        )
+
     def test_jsx_uses_local_json_parser(self):
         source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
         self.assertIn('#include "json2.jsx"', source)
