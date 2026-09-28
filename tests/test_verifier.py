@@ -211,6 +211,16 @@ class PathResolverTests(unittest.TestCase):
         self.assertTrue(resolved.ok)
         self.assertEqual(resolved.value, "PILOT TEST")
 
+    def test_runtime_keys_do_not_shadow_literal_layer_names(self):
+        state = rich_state()
+        resolved = resolve_path(
+            state,
+            "layer[name=PILOT_TEXT].source_text",
+            {"PILOT_TEXT": "WRONG_RUNTIME_VALUE"},
+        )
+        self.assertTrue(resolved.ok)
+        self.assertEqual(resolved.value, "PILOT TEST")
+
     def test_duplicate_named_layer_is_ambiguous(self):
         state = rich_state()
         duplicate = copy.deepcopy(state["layers"][0])
