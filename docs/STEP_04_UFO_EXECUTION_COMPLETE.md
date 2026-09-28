@@ -91,7 +91,7 @@ config/ufo/system_test.yaml
 UFO_ENV=test
 \`\`\`
 
-The original UFO checkout remains untouched.
+The original UFO checkout remains untouched. The detached worktree must start clean at the pinned commit; after the pilot overlay is applied, the adapter permits exactly one tracked change (`config/ufo/mcp.yaml`) and one untracked file (`config/ufo/system_test.yaml`). Any other unexpected worktree modification aborts execution.
 
 ## UI-only overlay
 
@@ -113,7 +113,7 @@ INPUT_TEXT_API = type_keys
 CLICK_API = click_input
 \`\`\`
 
-This removes API/MCP/self-evaluation/experience-learning routes from the measured path.
+This removes non-UI API, command-line, COM, hardware, external-MCP, self-evaluation, and experience-learning routes from the measured path. UFO's local UI tools still use its internal MCP transport, so the temporary worktree rewrites `config/ufo/mcp.yaml` to expose only `UICollector`, `HostUIExecutor`, and `AppUIExecutor`.
 
 ## Follower round budget
 
@@ -155,7 +155,7 @@ Step 04 records:
 
 - run ID,
 - skill ID,
-- fixture ID/path/hash,
+- fixture ID/path/hash and certified AE build identity,
 - plan and plan hash,
 - pinned UFO commit,
 - exact command,
