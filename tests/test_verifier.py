@@ -238,6 +238,48 @@ class AssertionTests(unittest.TestCase):
         self.assertFalse(result.contract_error)
         self.assertTrue(all(item.passed for item in result.results))
 
+
+    def test_boolean_does_not_equal_numeric_one(self):
+        result = evaluate_assertions(
+            {"project": {"composition_count": True}},
+            [{"path": "project.composition_count", "op": "eq", "value": 1}],
+        )
+        self.assertFalse(result.passed)
+
+    def test_count_eq_rejects_strings(self):
+        result = evaluate_assertions(
+            {"layers": "x"},
+            [{"path": "layers", "op": "count_eq", "value": 1}],
+        )
+        self.assertFalse(result.passed)
+
+    def test_keyframe_boolean_does_not_equal_numeric_zero(self):
+        result = evaluate_assertions(
+            {
+                "layers": [
+                    {
+                        "name": "PILOT_TEXT",
+                        "properties": {
+                            "opacity": {
+                                "keyframes": [
+                                    {"frame": 0, "time_seconds": 0, "value": False}
+                                ]
+                            }
+                        },
+                    }
+                ]
+            },
+            [
+                {
+                    "path": "layer[name=PILOT_TEXT].properties.opacity.keyframes",
+                    "op": "contains_keyframe",
+                    "frame": 0,
+                    "value": 0,
+                }
+            ],
+        )
+        self.assertFalse(result.passed)
+
     def test_unknown_operator_fails_closed(self):
         result = evaluate_assertions(
             rich_state(),
@@ -321,6 +363,48 @@ class PreflightTests(unittest.TestCase):
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "READER_NOT_OK")
+
+
+    def test_fixture_proof_capability_missing_blocks_before_execution(self):
+        state = fixture_state("AE-PILOT-004")
+        known = contract().ae_reader_contract["known_capability_ids"]
+        capabilities = [
+            item for item in known if item != "layer.source_text"
+        ]
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence_for(
+                state,
+                capabilities=capabilities,
+                captured_at=20,
+            ),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            expected_ae_build="26.0-test",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "READER_CAPABILITY_MISSING")
+        self.assertIn(
+            "layer.source_text",
+            decision.details["missing_capabilities"],
+        )
+
+    def test_fixture_boolean_cannot_impersonate_numeric_count(self):
+        state = fixture_state("AE-PILOT-001")
+        state["project"]["composition_count"] = False
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-001",
+            evidence=evidence_for(state, captured_at=20),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            expected_ae_build="26.0-test",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "FIXTURE_STATE_MISMATCH")
 
     def test_missing_capability_blocks_before_execution(self):
         state = fixture_state("AE-PILOT-004")
