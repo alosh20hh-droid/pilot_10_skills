@@ -190,8 +190,11 @@ class PathResolverTests(unittest.TestCase):
         state = rich_state()
         resolved = resolve_path(
             state,
-            "layer[name=PILOT_TEXT].effects[stable_id=stable_effect_id].property[display_name=Blurriness].value",
-            {"stable_effect_id": "ADBE Gaussian Blur 2"},
+            "layer[name=PILOT_TEXT].effects[stable_id=stable_effect_id].property[stable_id=stable_property_id].value",
+            {
+                "stable_effect_id": "ADBE Gaussian Blur 2",
+                "stable_property_id": "ADBE Gaussian Blur 2-0001",
+            },
         )
         self.assertTrue(resolved.ok)
         self.assertEqual(resolved.value, 25)
@@ -538,7 +541,10 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            runtime={"stable_effect_id": 123},
+            runtime={
+                "stable_effect_id": 123,
+                "stable_property_id": "ADBE Gaussian Blur 2-0001",
+            },
             expected_ae_build="26.0-test",
         )
         self.assertFalse(decision.can_execute)
@@ -552,7 +558,10 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            runtime={"stable_effect_id": "ADBE Gaussian Blur 2"},
+            runtime={
+                "stable_effect_id": "ADBE Gaussian Blur 2",
+                "stable_property_id": "ADBE Gaussian Blur 2-0001",
+            },
             expected_ae_build="26.0-test",
         )
         self.assertTrue(decision.can_execute)
@@ -654,7 +663,10 @@ class PostVerificationTests(unittest.TestCase):
             expected_request_id="pre-10",
             run_started_at=10,
             environment=good_environment(),
-            runtime={"stable_effect_id": "ADBE Gaussian Blur 2"},
+            runtime={
+                "stable_effect_id": "ADBE Gaussian Blur 2",
+                "stable_property_id": "ADBE Gaussian Blur 2-0001",
+            },
             expected_ae_build="26.0-test",
         )
         self.assertTrue(preflight.can_execute, preflight.to_dict())
@@ -687,7 +699,10 @@ class PostVerificationTests(unittest.TestCase):
             expected_run_id="run-10",
             expected_request_id="post-10",
             last_action_at=30,
-            runtime={"stable_effect_id": "OTHER_EFFECT"},
+            runtime={
+                "stable_effect_id": "OTHER_EFFECT",
+                "stable_property_id": "OTHER_PROP",
+            },
         )
         self.assertEqual(decision.run_status, "INCONCLUSIVE")
         self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_CHANGED")
@@ -771,6 +786,35 @@ class PostVerificationTests(unittest.TestCase):
             },
         )
         self.assertEqual(decision.run_status, "PASS")
+
+
+    def test_post_missing_skill_capability_is_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        known = contract().ae_reader_contract["known_capability_ids"]
+        post_capabilities = [
+            item for item in known if item != "layer.transform.position"
+        ]
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                request_id="post-1",
+                captured_at=40,
+                capabilities=post_capabilities,
+            ),
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "READER_CAPABILITY_MISSING")
+        self.assertIn(
+            "layer.transform.position",
+            decision.details["missing_capabilities"],
+        )
 
     def test_wrong_post_state_is_verification_failed(self):
         state = fixture_state("AE-PILOT-004")
