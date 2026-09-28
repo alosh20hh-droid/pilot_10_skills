@@ -109,7 +109,7 @@ def _resolve_selector(value: Any, selector: str, runtime: Dict[str, Any]) -> Pat
         and expected_raw[0] in {'"', "'"}
     ):
         expected = expected_raw[1:-1]
-    elif expected_raw in runtime:
+    elif key == "stable_id" and expected_raw in runtime:
         expected = runtime[expected_raw]
     else:
         expected = expected_raw
