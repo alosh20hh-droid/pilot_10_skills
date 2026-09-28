@@ -248,6 +248,10 @@ class FixtureRepositoryTests(unittest.TestCase):
         path, record = self._certify()
         self.assertEqual(record["status"], "CERTIFIED")
         self.assertEqual(record["sha256"], sha256_file(path))
+        self.assertEqual(
+            record["ae_build_identity"],
+            "26.0|test-build|1",
+        )
         verified = self.repository.verify_canonical("FX-004-POSITION-READY")
         self.assertEqual(verified["sha256"], record["sha256"])
 
@@ -503,6 +507,10 @@ class FixtureRepositoryTests(unittest.TestCase):
         )
         self.assertTrue(Path(copied["path"]).is_file())
         self.assertEqual(copied["copy_sha256"], record["sha256"])
+        self.assertEqual(
+            copied["certified_ae_build_identity"],
+            record["ae_build_identity"],
+        )
         with self.assertRaises(FixtureCertificationError):
             self.repository.create_run_copy(
                 "FX-004-POSITION-READY",
