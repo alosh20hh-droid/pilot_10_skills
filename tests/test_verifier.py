@@ -178,6 +178,34 @@ class ContractTests(unittest.TestCase):
                 )
             )
 
+    def test_contract_rejects_malformed_assertion_operands(self):
+        def mutate(raw):
+            skill = next(
+                item for item in raw["skills"] if item["id"] == "AE-PILOT-004"
+            )
+            skill["assertions"]["post"][0] = {
+                "path": "layer[name=PILOT_TEXT].transform.position.x",
+                "op": "approx",
+                "value": "960",
+                "tolerance": -1,
+            }
+
+        with self.assertRaises(ContractError):
+            self._load_modified(mutate)
+
+    def test_contract_rejects_undeclared_stable_id_runtime_token(self):
+        def mutate(raw):
+            skill = next(
+                item for item in raw["skills"] if item["id"] == "AE-PILOT-010"
+            )
+            skill["assertions"]["post"][1]["path"] = (
+                "layer[name=PILOT_TEXT].effects[stable_id=unknown_id]."
+                "property[stable_id=stable_property_id].value"
+            )
+
+        with self.assertRaises(ContractError):
+            self._load_modified(mutate)
+
     def test_effect_assertion_requires_effect_identity_capabilities(self):
         def mutate(raw):
             skill = next(
