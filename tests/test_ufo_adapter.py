@@ -260,6 +260,17 @@ class UFOWorkspaceTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, serialized)
 
+    def test_unexpected_worktree_changes_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "ufo"
+            root.mkdir()
+            make_fake_git_ufo(root)
+
+            unexpected = root / "unexpected.txt"
+            unexpected.write_text("unexpected", encoding="utf-8")
+            with self.assertRaises(Exception):
+                UFOWorkspaceManager._require_only_expected_overlay_changes(root)
+
     def test_overlay_is_written_only_to_detached_worktree(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "ufo"
