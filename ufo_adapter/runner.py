@@ -21,8 +21,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
+from verifier.contract import PilotContract
+
 from .lock import load_upstream_lock, require_locked_checkout
-from .plan import UFOPlan
+from .plan import UFOPlan, compile_skill_plan
 from .workspace import UFOWorkspaceError, UFOWorkspaceManager
 
 
@@ -130,6 +132,7 @@ class UFOMeasuredRunner:
         run_registry_root: Optional[str | Path] = None,
         worktree_root: Optional[str | Path] = None,
         lock_path: Optional[str | Path] = None,
+        contract_path: Optional[str | Path] = None,
     ) -> None:
         self.ufo_checkout = Path(ufo_checkout).expanduser().resolve()
         self.python_executable = python_executable or os.environ.get(
@@ -145,6 +148,10 @@ class UFOMeasuredRunner:
             or (Path(__file__).resolve().parents[1] / "ufo_adapter" / "run_registry")
         )
         self.lock = load_upstream_lock(lock_path)
+        self.contract = PilotContract.load(
+            contract_path
+            or (Path(__file__).resolve().parents[1] / "pilot_10_skills.yaml")
+        )
         self.workspace_manager = UFOWorkspaceManager(
             self.ufo_checkout,
             base_dir=worktree_root,
@@ -183,6 +190,26 @@ class UFOMeasuredRunner:
             "INFO",
         ]
 
+    def _require_canonical_plan(self, plan: UFOPlan) -> UFOPlan:
+        if not isinstance(plan, UFOPlan):
+            raise UFOExecutionError("measured execution requires a compiled UFOPlan")
+        try:
+            expected = compile_skill_plan(self.contract, plan.skill_id)
+        except Exception as exc:
+            raise UFOExecutionError(
+                f"unable to compile canonical plan for {getattr(plan, 'skill_id', None)!r}: {exc}"
+            ) from exc
+
+        if plan.fixture_id != expected.fixture_id:
+            raise UFOExecutionError(
+                "UFO plan fixture_id differs from the canonical pilot skill"
+            )
+        if plan.sha256() != expected.sha256():
+            raise UFOExecutionError(
+                "UFO plan differs from the canonical pilot measured UI plan"
+            )
+        return expected
+
     def _bind_fixture(
         self,
         *,
@@ -192,6 +219,7 @@ class UFOMeasuredRunner:
         fixture_sha256: str,
     ) -> tuple[UFOPlan, Path]:
         run_id = _validate_run_id(run_id)
+        plan = self._require_canonical_plan(plan)
         path = Path(fixture_path).expanduser().resolve()
         if not path.is_file():
             raise UFOExecutionError(f"disposable fixture file not found: {path}")
