@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,23 @@ DEFAULT_CONTRACT = Path(__file__).resolve().parents[1] / "pilot_10_skills.yaml"
 def _print(value: Any) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
 
+
+
+
+def _is_git_repository(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
 
 
 def _resolve_ufo_checkout(value: str | None) -> str:
@@ -45,7 +63,7 @@ def _resolve_ufo_checkout(value: str | None) -> str:
         if key in seen:
             continue
         seen.add(key)
-        if (resolved / "ufo" / "__main__.py").is_file():
+        if _is_git_repository(resolved):
             return str(resolved)
 
     raise UFOExecutionError(
