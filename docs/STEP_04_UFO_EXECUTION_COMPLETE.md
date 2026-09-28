@@ -30,7 +30,7 @@ microsoft/UFO
 e2a03126241c696fdaf9a669a271ca3fca6d9916
 \`\`\`
 
-The adapter verifies exact Git HEAD, clean worktree, and exact blob hashes for the audited upstream files.
+The adapter verifies that the local Git repository contains the pinned commit and that the audited blobs at that pinned commit match the lock. The user's current branch/HEAD and local working-tree changes are not executed.
 
 The audited surface includes:
 
@@ -202,7 +202,7 @@ No claim is made that a real After Effects skill was executed yet.
 Live measured execution depends on:
 
 1. Step 03 live-certified \`.aep\` fixtures,
-2. a local UFO checkout matching the pinned commit,
+2. a local UFO Git repository containing the pinned commit,
 3. Step 05 model configuration,
 4. real After Effects preflight.
 
