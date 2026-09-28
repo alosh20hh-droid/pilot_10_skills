@@ -36,7 +36,7 @@ def good_environment():
         "ae_major_version": 26,
         "ae_language": "en-US",
         "workspace_id": "PILOT_WORKSPACE",
-        "ae_build": "26.0-test",
+        "ae_build": "26.0|test-build|1",
         "fixture_path": TEST_FIXTURE_PATH,
     }
 
@@ -57,6 +57,13 @@ def evidence_for(state, *, run_id="run-1", request_id="request-1", captured_at=2
             "reader_version": c.expected_reader_version(),
             "schema_version": c.expected_reader_schema_version(),
             "supported_capabilities": list(capabilities if capabilities is not None else known),
+        },
+        "application": {
+            "name": "After Effects",
+            "version": "26.0",
+            "build_name": "test-build",
+            "build_number": 1,
+            "language": "en-US",
         },
         "state": copied_state,
         "errors": [],
@@ -313,7 +320,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertTrue(decision.can_execute)
         self.assertIsNone(decision.run_status)
@@ -328,7 +335,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id=None,
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.run_status, "BLOCKED")
@@ -342,7 +349,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "RUN_ID_REQUIRED")
@@ -359,7 +366,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "READER_NOT_OK")
@@ -382,7 +389,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "READER_CAPABILITY_MISSING")
@@ -401,7 +408,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "FIXTURE_STATE_MISMATCH")
@@ -420,7 +427,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.run_status, "BLOCKED")
@@ -436,7 +443,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=environment,
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "ENVIRONMENT_MISMATCH")
@@ -451,7 +458,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=environment,
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "ENVIRONMENT_MISSING")
@@ -466,7 +473,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "CONTRADICTORY_EVIDENCE")
@@ -483,7 +490,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "FIXTURE_IDENTITY_MISMATCH")
@@ -498,7 +505,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=environment,
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "FIXTURE_IDENTITY_REQUIRED")
@@ -513,7 +520,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=environment,
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.run_status, "BLOCKED")
@@ -531,7 +538,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "MALFORMED_EVIDENCE")
@@ -544,7 +551,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "STALE_EVIDENCE")
@@ -559,7 +566,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "FIXTURE_STATE_MISMATCH")
@@ -574,7 +581,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertTrue(decision.can_execute)
 
@@ -611,7 +618,7 @@ class PreflightTests(unittest.TestCase):
             expected_request_id="request-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_MISSING")
@@ -629,7 +636,7 @@ class PreflightTests(unittest.TestCase):
                 "stable_effect_id": 123,
                 "stable_property_id": "ADBE Gaussian Blur 2-0001",
             },
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertFalse(decision.can_execute)
         self.assertEqual(decision.reason_code, "RUNTIME_CALIBRATION_MISSING")
@@ -646,7 +653,7 @@ class PreflightTests(unittest.TestCase):
                 "stable_effect_id": "ADBE Gaussian Blur 2",
                 "stable_property_id": "ADBE Gaussian Blur 2-0001",
             },
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertTrue(decision.can_execute)
 
@@ -662,7 +669,7 @@ class PostVerificationTests(unittest.TestCase):
             expected_request_id="pre-1",
             run_started_at=10,
             environment=good_environment(),
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertTrue(self.preflight.can_execute)
 
@@ -751,7 +758,7 @@ class PostVerificationTests(unittest.TestCase):
                 "stable_effect_id": "ADBE Gaussian Blur 2",
                 "stable_property_id": "ADBE Gaussian Blur 2-0001",
             },
-            expected_ae_build="26.0-test",
+            expected_ae_build="26.0|test-build|1",
         )
         self.assertTrue(preflight.can_execute, preflight.to_dict())
 
@@ -899,6 +906,40 @@ class PostVerificationTests(unittest.TestCase):
             "layer.transform.position",
             decision.details["missing_capabilities"],
         )
+
+
+    def test_preflight_rejects_reader_build_identity_mismatch(self):
+        state = fixture_state("AE-PILOT-004")
+        evidence = evidence_for(state, captured_at=20)
+        evidence["application"]["build_number"] = 2
+        decision = self.verifier.verify_preflight(
+            skill_id="AE-PILOT-004",
+            evidence=evidence,
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            run_started_at=10,
+            environment=good_environment(),
+            expected_ae_build="26.0|test-build|1",
+        )
+        self.assertFalse(decision.can_execute)
+        self.assertEqual(decision.reason_code, "READER_ENVIRONMENT_MISMATCH")
+
+    def test_post_rejects_after_effects_build_change(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        evidence = evidence_for(state, request_id="post-1", captured_at=40)
+        evidence["application"]["build_number"] = 2
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence,
+            expected_run_id="run-1",
+            expected_request_id="post-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "POST_APPLICATION_BUILD_MISMATCH")
 
     def test_wrong_post_state_is_verification_failed(self):
         state = fixture_state("AE-PILOT-004")
@@ -1059,7 +1100,7 @@ class VerificationBundleTests(unittest.TestCase):
                 request_id="post-bundle",
                 captured_at=40,
             ),
-            "expected_ae_build": "26.0-test",
+            "expected_ae_build": "26.0|test-build|1",
         }
 
     def test_bundle_rejects_string_boolean(self):
