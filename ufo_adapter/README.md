@@ -36,9 +36,9 @@ The adapter expects an existing checkout, for example:
 C:\Users\AL-BASHA\UFO
 \`\`\`
 
-Measured execution validates that checkout against the pinned upstream source and then creates a temporary detached Git worktree for the actual run.
+Measured execution validates that the local Git repository contains the pinned upstream commit and that the audited blobs at that pinned commit match the lock. The user's current branch/HEAD does **not** need to be moved to the pinned commit, and local uncommitted work is not executed.
 
-The original checkout remains clean.
+The actual run always uses a temporary detached Git worktree at the pinned commit. The original checkout is not modified by the adapter.
 
 ## Pinned upstream
 
@@ -52,10 +52,11 @@ mode: follower
 
 Measured execution refuses:
 
-- the wrong UFO commit,
-- a dirty checkout,
-- missing audited source files,
-- changed audited file blobs.
+- a local repository that does not contain the pinned UFO commit,
+- missing audited files at that pinned commit,
+- changed audited blobs at that pinned commit.
+
+The source checkout may remain on another branch or contain local work because that source working tree is never used for measured execution.
 
 The lock covers Follower Mode, plan parsing, session limits, UI controller actions, system configuration, and environment-specific configuration overlay behavior.
 
