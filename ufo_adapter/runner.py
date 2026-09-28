@@ -159,12 +159,10 @@ class UFOMeasuredRunner:
             lock=self.lock,
         )
 
-        executable = self.ufo_checkout / "ufo" / "__main__.py"
-        if not executable.is_file():
-            raise UFOExecutionError(
-                f"locked checkout is missing ufo/__main__.py: {executable}"
-            )
-
+        # Do not inspect executable files from the user's current working
+        # tree here. Measured execution runs from a detached worktree at the
+        # pinned commit, and the lock already proves the audited entrypoint blob
+        # exists at that commit.
         return checkout
 
     def build_command(self, task_name: str, plan_path: Path) -> list[str]:
