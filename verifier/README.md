@@ -205,7 +205,8 @@ Bundle shape:
     "ae_major_version": 26,
     "ae_language": "en-US",
     "workspace_id": "PILOT_WORKSPACE",
-    "ae_build": "26.x build pinned by pilot"
+    "ae_build": "26.0|<build-name>|<build-number>",
+    "fixture_path": "C:\\...\\fixtures\\runs\\<run-key>\\FX-004-POSITION-READY.aep"
   },
   "runtime": {},
   "pre_evidence": {},
@@ -214,7 +215,9 @@ Bundle shape:
 }
 ```
 
-For skill 10, `runtime` must include a calibrated `stable_effect_id`.
+The exact build identity uses the Reader-derived form `version|build_name|build_number` and must remain pinned for the pilot batch. The environment must also carry the exact disposable `fixture_path`; preflight compares it to AE Reader's live project file identity.
+
+For skill 10, `runtime` must include both calibrated `stable_effect_id` and `stable_property_id`.
 
 ## Tests
 
