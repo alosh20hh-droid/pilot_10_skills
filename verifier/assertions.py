@@ -51,6 +51,13 @@ def _operator_eq(actual: Any, assertion: Dict[str, Any], defaults: Dict[str, flo
         tolerance = float(assertion.get("tolerance", defaults["numeric"]))
         passed = _numeric_equal(actual, expected, tolerance)
         return passed, f"numeric equality tolerance={tolerance}"
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return (
+            isinstance(actual, bool)
+            and isinstance(expected, bool)
+            and actual is expected,
+            "strict boolean equality",
+        )
     return actual == expected, "exact equality"
 
 
@@ -66,8 +73,8 @@ def _operator_count_eq(actual: Any, assertion: Dict[str, Any], defaults: Dict[st
     expected = assertion.get("value")
     if not isinstance(expected, int) or isinstance(expected, bool) or expected < 0:
         return False, "count_eq requires a non-negative integer expectation"
-    if not isinstance(actual, (list, tuple, dict, str)):
-        return False, "count_eq requires a countable value"
+    if not isinstance(actual, (list, tuple, dict)):
+        return False, "count_eq requires a list/tuple/object value"
     return len(actual) == expected, f"count={len(actual)} expected={expected}"
 
 
@@ -146,6 +153,13 @@ def _operator_contains_keyframe(actual: Any, assertion: Dict[str, Any], defaults
             actual_value = keyframe.get("value")
             if _is_number(actual_value) and _is_number(expected_value):
                 if not _numeric_equal(actual_value, expected_value, value_tolerance):
+                    continue
+            elif isinstance(actual_value, bool) or isinstance(expected_value, bool):
+                if not (
+                    isinstance(actual_value, bool)
+                    and isinstance(expected_value, bool)
+                    and actual_value is expected_value
+                ):
                     continue
             elif actual_value != expected_value:
                 continue
