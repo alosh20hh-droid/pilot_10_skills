@@ -202,10 +202,53 @@ class UFOMeasuredRunner:
                 "fixture filename does not match the skill's declared fixture_id"
             )
         expected_run_key = _safe_name(run_id)
-        if path.parent.name != expected_run_key:
+        if path.parent.name != expected_run_key or path.parent.parent.name != "runs":
             raise UFOExecutionError(
-                "fixture must come from the run-specific disposable fixture workspace"
+                "fixture must come from the Step 03 run-specific disposable fixture workspace"
             )
+
+        registry_path = path.parent.parent.parent / "run_registry" / f"{expected_run_key}.json"
+        try:
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise UFOExecutionError(
+                "Step 03 fixture run registry record is missing"
+            ) from exc
+        except (OSError, ValueError, UnicodeError) as exc:
+            raise UFOExecutionError(
+                f"Step 03 fixture run registry record is invalid: {exc}"
+            ) from exc
+        if not isinstance(registry, dict):
+            raise UFOExecutionError("Step 03 fixture run registry must be an object")
+        if registry.get("status") != "READY":
+            raise UFOExecutionError("Step 03 fixture run copy is not READY")
+        if registry.get("run_id") != run_id or registry.get("run_key") != expected_run_key:
+            raise UFOExecutionError("Step 03 fixture run identity does not match")
+        if registry.get("fixture_id") != plan.fixture_id:
+            raise UFOExecutionError("Step 03 fixture registry references a different fixture")
+
+        registered_path = registry.get("copy_path")
+        if (
+            not isinstance(registered_path, str)
+            or Path(registered_path).expanduser().resolve() != path
+        ):
+            raise UFOExecutionError(
+                "fixture path does not match the Step 03 registered run copy"
+            )
+
+        registered_hash = registry.get("copy_sha256")
+        canonical_hash = registry.get("canonical_sha256")
+        if (
+            not isinstance(registered_hash, str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", registered_hash)
+            or not isinstance(canonical_hash, str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", canonical_hash)
+            or registered_hash.lower() != canonical_hash.lower()
+        ):
+            raise UFOExecutionError(
+                "Step 03 fixture registry hash binding is invalid"
+            )
+
         if not isinstance(fixture_sha256, str) or not re.fullmatch(
             r"[0-9a-fA-F]{64}",
             fixture_sha256,
@@ -213,10 +256,15 @@ class UFOMeasuredRunner:
             raise UFOExecutionError(
                 "fixture_sha256 must be a 64-character SHA-256 hex string"
             )
-        actual_hash = _sha256_file(path)
-        if actual_hash.lower() != fixture_sha256.lower():
+        if fixture_sha256.lower() != registered_hash.lower():
             raise UFOExecutionError(
-                "disposable fixture hash does not match the certified run-copy hash"
+                "supplied fixture hash does not match the Step 03 registered run copy"
+            )
+
+        actual_hash = _sha256_file(path)
+        if actual_hash.lower() != registered_hash.lower():
+            raise UFOExecutionError(
+                "disposable fixture bytes do not match the Step 03 registered run-copy hash"
             )
         # The fixture must already be open before the measured UFO run. Keep the
         # Follower object bound to AfterFX.exe so opening the fixture itself is
