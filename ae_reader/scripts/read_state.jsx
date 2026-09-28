@@ -294,7 +294,9 @@ function readEffects(layer, comp) {
     }
 
     if (!effects) {
-        return result;
+        throw new Error(
+            "Effect group is unavailable for layer " + String(layer.name)
+        );
     }
 
     var count = 0;
