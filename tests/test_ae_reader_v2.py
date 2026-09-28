@@ -155,6 +155,23 @@ def sample_response(*, request_id="req-1", run_id="run-1", captured_at=None):
 
 
 class SchemaTests(unittest.TestCase):
+    def test_transform_boolean_values_are_not_coerced_to_numbers(self):
+        data = sample_response()
+        layer = data["layers"][0]
+        layer["position"]["property"]["current_value"] = [True, False]
+        layer["scale"]["current_value"] = [True, False]
+        layer["opacity"]["current_value"] = True
+
+        snapshot = AEStateSnapshot.from_dict(data)
+        state = snapshot.to_pilot_state()
+        transform = state["layers"][0]["transform"]
+        self.assertEqual(transform["position"], {"x": None, "y": None})
+        self.assertEqual(
+            transform["scale"],
+            {"x_percent": None, "y_percent": None},
+        )
+        self.assertIsNone(transform["opacity_percent"])
+
     def test_sample_response_parses_and_maps_to_pilot(self):
         snapshot = AEStateSnapshot.from_dict(sample_response())
         state = snapshot.to_pilot_state()
