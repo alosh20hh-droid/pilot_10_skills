@@ -69,8 +69,8 @@ The Step 04 adapter does not fork or patch Microsoft UFO.
 It:
 
 1. locks a known upstream commit,
-2. rejects dirty/mismatched checkouts,
+2. verifies the pinned commit and audited blobs inside the existing local Git repository without requiring the user's current branch to move,
 3. compiles the pilot's measured UI steps into upstream Follower plans,
-4. launches the upstream package unchanged,
+4. launches the pinned upstream revision from an isolated detached worktree with a pilot-only UI-routing overlay,
 5. captures process-level execution evidence,
 6. leaves success judgment to AE Reader + deterministic verifier.
