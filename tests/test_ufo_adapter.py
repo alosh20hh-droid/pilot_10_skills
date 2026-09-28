@@ -61,12 +61,35 @@ def make_fake_git_ufo(root: Path):
 
 def make_fixture(root: Path, fixture_id: str, run_id: str = "run-1"):
     run_key = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
-    directory = root / run_key
+    directory = root / "fixtures" / "runs" / run_key
+    registry_dir = root / "fixtures" / "run_registry"
     directory.mkdir(parents=True, exist_ok=True)
+    registry_dir.mkdir(parents=True, exist_ok=True)
+
     path = directory / f"{fixture_id}.aep"
     payload = ("fixture:" + fixture_id).encode("utf-8")
     path.write_bytes(payload)
-    return path, hashlib.sha256(payload).hexdigest()
+    fixture_hash = hashlib.sha256(payload).hexdigest()
+
+    (registry_dir / f"{run_key}.json").write_text(
+        json.dumps(
+            {
+                "status": "READY",
+                "run_id": run_id,
+                "run_key": run_key,
+                "fixture_id": fixture_id,
+                "canonical_sha256": fixture_hash,
+                "copy_sha256": fixture_hash,
+                "copy_path": str(path.resolve()),
+                "created_at": 1.0,
+                "disposable": True,
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return path, fixture_hash
 
 
 class UFOPlanTests(unittest.TestCase):
@@ -445,6 +468,49 @@ class UFORunnerTests(unittest.TestCase):
             with self.assertRaises(UFOExecutionError):
                 runner.prepare_run(
                     run_id="../unsafe",
+                    plan=plan,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
+                )
+
+    def test_unregistered_hashed_fixture_workspace_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(root, output_root=root / "runs")
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            run_id = "run-unregistered"
+            run_key = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
+            directory = root / "fixtures" / "runs" / run_key
+            directory.mkdir(parents=True)
+            fixture = directory / f"{plan.fixture_id}.aep"
+            payload = b"fixture"
+            fixture.write_bytes(payload)
+            fixture_hash = hashlib.sha256(payload).hexdigest()
+
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id=run_id,
+                    plan=plan,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
+                )
+
+    def test_tampered_step03_registry_hash_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(root, output_root=root / "runs")
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            run_id = "run-registry-tamper"
+            fixture, fixture_hash = make_fixture(root, plan.fixture_id, run_id)
+            run_key = hashlib.sha256(run_id.encode("utf-8")).hexdigest()
+            registry = root / "fixtures" / "run_registry" / f"{run_key}.json"
+            data = json.loads(registry.read_text(encoding="utf-8"))
+            data["copy_sha256"] = "0" * 64
+            registry.write_text(json.dumps(data), encoding="utf-8")
+
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id=run_id,
                     plan=plan,
                     fixture_path=fixture,
                     fixture_sha256=fixture_hash,
