@@ -52,6 +52,29 @@ def _normalize_locale(value: Any) -> Optional[str]:
     return value.strip().replace("_", "-").lower()
 
 
+def _application_build_identity(
+    version: Any,
+    build_name: Any,
+    build_number: Any,
+) -> Optional[str]:
+    if not isinstance(version, str) or not version.strip():
+        return None
+    if not isinstance(build_name, str) or not build_name.strip():
+        return None
+    if (
+        isinstance(build_number, bool)
+        or not isinstance(build_number, (int, float))
+        or not math.isfinite(float(build_number))
+    ):
+        return None
+    number = (
+        int(build_number)
+        if float(build_number).is_integer()
+        else float(build_number)
+    )
+    return f"{version.strip()}|{build_name.strip()}|{number}"
+
+
 class FixtureRepository:
     def __init__(
         self,
@@ -323,6 +346,16 @@ class FixtureRepository:
             fixture_path.relative_to(self.repo_root.resolve())
         )
 
+        ae_build_identity = _application_build_identity(
+            observed_reader_version,
+            reader_build_name,
+            reader_build_number,
+        )
+        if ae_build_identity is None:
+            raise FixtureCertificationError(
+                "unable to derive certified After Effects build identity"
+            )
+
         record = {
             "status": "CERTIFIED",
             "fixture_id": fixture_id,
@@ -339,6 +372,7 @@ class FixtureRepository:
             "captured_at": evidence.get("captured_at"),
             "certified_at": time.time(),
             "application": application,
+            "ae_build_identity": ae_build_identity,
             "builder_result": dict(builder_result or {}),
         }
 
@@ -406,6 +440,32 @@ class FixtureRepository:
         ):
             raise FixtureCertificationError(
                 "certification record Reader schema no longer matches the pilot contract"
+            )
+
+        application = record.get("application")
+        builder_result = record.get("builder_result")
+        if not isinstance(application, dict) or not isinstance(builder_result, dict):
+            raise FixtureCertificationError(
+                "certification record is missing AE application/build metadata"
+            )
+        recorded_build_identity = _application_build_identity(
+            application.get("version"),
+            application.get("build_name"),
+            application.get("build_number"),
+        )
+        builder_build_identity = _application_build_identity(
+            builder_result.get("ae_version"),
+            builder_result.get("ae_build_name"),
+            builder_result.get("ae_build_number"),
+        )
+        if (
+            recorded_build_identity is None
+            or builder_build_identity is None
+            or recorded_build_identity != builder_build_identity
+            or record.get("ae_build_identity") != recorded_build_identity
+        ):
+            raise FixtureCertificationError(
+                "certification record AE build identity is inconsistent"
             )
 
         path = self.canonical_path(fixture_id).resolve()
@@ -525,6 +585,7 @@ class FixtureRepository:
             "fixture_id": fixture_id,
             "canonical_sha256": record["sha256"],
             "copy_sha256": copy_hash,
+            "certified_ae_build_identity": record["ae_build_identity"],
             "copy_path": str(destination.resolve()),
             "created_at": created_at,
             "disposable": True,
