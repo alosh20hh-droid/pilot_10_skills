@@ -262,6 +262,44 @@ class FixtureRepository:
                 "After Effects language changed between fixture build and certification read"
             )
 
+        reader_build_name = application.get("build_name")
+        reader_build_number = application.get("build_number")
+        builder_build_name = builder_result.get("ae_build_name")
+        builder_build_number = builder_result.get("ae_build_number")
+
+        if not isinstance(reader_build_name, str) or not reader_build_name.strip():
+            raise FixtureCertificationError(
+                "AE Reader certification evidence is missing build_name"
+            )
+        if (
+            isinstance(reader_build_number, bool)
+            or not isinstance(reader_build_number, (int, float))
+            or not math.isfinite(float(reader_build_number))
+        ):
+            raise FixtureCertificationError(
+                "AE Reader certification evidence is missing a valid build_number"
+            )
+        if not isinstance(builder_build_name, str) or not builder_build_name.strip():
+            raise FixtureCertificationError(
+                "fixture builder metadata is missing ae_build_name"
+            )
+        if (
+            isinstance(builder_build_number, bool)
+            or not isinstance(builder_build_number, (int, float))
+            or not math.isfinite(float(builder_build_number))
+        ):
+            raise FixtureCertificationError(
+                "fixture builder metadata is missing a valid ae_build_number"
+            )
+        if builder_build_name != reader_build_name:
+            raise FixtureCertificationError(
+                "After Effects build name changed between fixture build and certification read"
+            )
+        if float(builder_build_number) != float(reader_build_number):
+            raise FixtureCertificationError(
+                "After Effects build number changed between fixture build and certification read"
+            )
+
         saved_at = builder_result.get("saved_at")
         if (
             isinstance(saved_at, bool)
