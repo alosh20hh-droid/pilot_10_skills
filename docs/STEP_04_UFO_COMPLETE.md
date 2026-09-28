@@ -16,7 +16,7 @@ It is not the source of truth for success.
 
 - pinned Microsoft UFO upstream commit,
 - source audit of upstream CLI, FollowerSession, PlanReader, SessionFactory, and UI controller,
-- clean-checkout and exact-commit enforcement,
+- pinned-commit availability and audited-blob enforcement without moving the user's current checkout,
 - Follower Mode-only authorization,
 - explicit rejection of measured batch/operator modes,
 - deterministic compiler for all ten pilot skills,
@@ -37,8 +37,7 @@ It is not the source of truth for success.
 
 Measured execution is refused when:
 
-- the local UFO checkout is not the pinned commit,
-- the local UFO worktree is dirty,
+- the local UFO repository does not contain the pinned commit,
 - an audited upstream source file is missing,
 - execution is not on Windows,
 - the adapter is not armed explicitly,
@@ -54,7 +53,7 @@ The remaining live Step 04 gate is:
 1. materialize/certify the needed Step 03 fixture,
 2. create a fresh run copy,
 3. load that run copy in AE 26.x,
-4. validate the pinned local UFO checkout,
+4. validate that the local UFO repository contains the pinned commit and audited blobs,
 5. execute one low-risk pilot skill through Follower Mode,
 6. capture UFO logs,
 7. use AE Reader + Verifier to prove the resulting AE state.
