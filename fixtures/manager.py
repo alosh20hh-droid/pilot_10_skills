@@ -476,6 +476,7 @@ class FixtureRepository:
             with os.fdopen(handle, "w", encoding="utf-8") as registry_file:
                 json.dump(
                     {
+                        "status": "RESERVED",
                         "run_id": run_id,
                         "run_key": run_key,
                         "fixture_id": fixture_id,
@@ -510,16 +511,44 @@ class FixtureRepository:
                 pass
             raise
 
-        return {
-            "fixture_id": fixture_id,
+        copy_hash = sha256_file(destination)
+        created_at = time.time()
+        ready_record = {
+            "status": "READY",
             "run_id": run_id,
             "run_key": run_key,
+            "fixture_id": fixture_id,
             "canonical_sha256": record["sha256"],
-            "copy_sha256": sha256_file(destination),
-            "path": str(destination.resolve()),
-            "created_at": time.time(),
+            "copy_sha256": copy_hash,
+            "copy_path": str(destination.resolve()),
+            "created_at": created_at,
             "disposable": True,
         }
+        registry_tmp = registry_path.with_suffix(".tmp")
+        try:
+            registry_tmp.write_text(
+                json.dumps(
+                    ready_record,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            os.replace(registry_tmp, registry_path)
+        except Exception:
+            shutil.rmtree(destination_dir, ignore_errors=True)
+            try:
+                registry_tmp.unlink()
+            except FileNotFoundError:
+                pass
+            try:
+                registry_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+
+        return dict(ready_record)
 
     def remove_run_copy(self, run_id: str) -> None:
         if not isinstance(run_id, str) or not run_id:
