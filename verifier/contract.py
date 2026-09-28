@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,104 @@ from .assertions import SUPPORTED_OPERATORS
 
 class ContractError(ValueError):
     pass
+
+
+
+def _is_finite_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
+
+
+def _assertion_shape_errors(
+    assertion: Dict[str, Any],
+    *,
+    runtime_calibration: Dict[str, Any],
+) -> List[str]:
+    errors: List[str] = []
+    op = assertion.get("op")
+
+    for tolerance_key in ("tolerance", "value_tolerance", "seconds_tolerance"):
+        if tolerance_key in assertion:
+            value = assertion.get(tolerance_key)
+            if not _is_finite_number(value) or float(value) < 0:
+                errors.append(f"{tolerance_key} must be a finite non-negative number")
+
+    if "frame_tolerance" in assertion:
+        value = assertion.get("frame_tolerance")
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append("frame_tolerance must be a non-negative integer")
+
+    if op in {"eq", "approx", "count_eq"} and "value" not in assertion:
+        errors.append(f"{op} requires value")
+
+    if op == "approx" and not _is_finite_number(assertion.get("value")):
+        errors.append("approx value must be a finite number")
+
+    if op == "count_eq":
+        value = assertion.get("value")
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append("count_eq value must be a non-negative integer")
+
+    if op == "contains_layer":
+        fields = [key for key in ("name", "type", "source_text") if key in assertion]
+        if not fields:
+            errors.append("contains_layer requires at least one identity field")
+        for key in fields:
+            if not isinstance(assertion.get(key), str):
+                errors.append(f"contains_layer {key} must be a string")
+
+    if op == "not_contains_layer_name":
+        value = assertion.get("value")
+        if not isinstance(value, str) or not value:
+            errors.append("not_contains_layer_name value must be a non-empty string")
+
+    if op == "count_layer_name":
+        name = assertion.get("name")
+        value = assertion.get("value")
+        if not isinstance(name, str) or not name:
+            errors.append("count_layer_name name must be a non-empty string")
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append("count_layer_name value must be a non-negative integer")
+
+    if op == "contains_keyframe":
+        if not any(key in assertion for key in ("frame", "time_seconds", "value")):
+            errors.append("contains_keyframe requires frame, time_seconds, or value")
+        if "frame" in assertion:
+            frame = assertion.get("frame")
+            if not isinstance(frame, int) or isinstance(frame, bool) or frame < 0:
+                errors.append("contains_keyframe frame must be a non-negative integer")
+        if "time_seconds" in assertion and not _is_finite_number(assertion.get("time_seconds")):
+            errors.append("contains_keyframe time_seconds must be finite")
+        if "value" in assertion:
+            value = assertion.get("value")
+            if isinstance(value, float) and not math.isfinite(value):
+                errors.append("contains_keyframe value must not be non-finite")
+
+    if op == "contains_effect_stable_id":
+        runtime_key = assertion.get("runtime_key")
+        if not isinstance(runtime_key, str) or not runtime_key:
+            errors.append("contains_effect_stable_id requires runtime_key")
+        elif runtime_key not in runtime_calibration:
+            errors.append(
+                "contains_effect_stable_id runtime_key is not declared in runtime_calibration"
+            )
+
+    path = assertion.get("path")
+    if isinstance(path, str):
+        runtime_tokens = re.findall(
+            r"\[stable_id=([A-Za-z_][A-Za-z0-9_]*)\]",
+            path,
+        )
+        for token in runtime_tokens:
+            if token not in runtime_calibration:
+                errors.append(
+                    f"path stable-id token {token} is not declared in runtime_calibration"
+                )
+
+    return errors
 
 
 @dataclass(frozen=True)
@@ -242,6 +341,13 @@ class PilotContract:
                         + ", ".join(unknown_preferred)
                     )
 
+            runtime_calibration = skill.get("runtime_calibration")
+            if runtime_calibration is None:
+                runtime_calibration = {}
+            if not isinstance(runtime_calibration, dict):
+                errors.append(f"{skill_id} runtime_calibration must be an object")
+                runtime_calibration = {}
+
             assertions = skill.get("assertions")
             if not isinstance(assertions, dict):
                 errors.append(f"{skill_id} is missing assertions")
@@ -264,6 +370,14 @@ class PilotContract:
                         errors.append(
                             f"{skill_id} {phase}[{index}] unsupported operator {op!r}"
                         )
+                    else:
+                        for shape_error in _assertion_shape_errors(
+                            assertion,
+                            runtime_calibration=runtime_calibration,
+                        ):
+                            errors.append(
+                                f"{skill_id} {phase}[{index}] {shape_error}"
+                            )
 
                     required_for_assertion = set()
                     if isinstance(path, str):
