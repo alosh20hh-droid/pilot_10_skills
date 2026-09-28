@@ -423,7 +423,7 @@ class UFOMeasuredRunner:
 
         try:
             workspace = self.workspace_manager.create(
-                commit=str(checkout["head"]),
+                commit=str(checkout["expected_commit"]),
                 measured_step_count=len(plan.to_dict()["steps"]),
             )
         except UFOWorkspaceError as exc:
@@ -493,7 +493,7 @@ class UFOMeasuredRunner:
                     else None
                 ),
                 ufo_checkout=str(self.ufo_checkout),
-                ufo_commit=str(checkout["head"]),
+                ufo_commit=str(checkout["expected_commit"]),
                 isolated_worktree=True,
                 overlay_max_round=workspace.max_round,
                 overlay_max_step=workspace.max_step,
