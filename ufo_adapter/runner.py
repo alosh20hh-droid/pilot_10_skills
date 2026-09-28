@@ -39,6 +39,7 @@ class UFOExecutionResult:
     fixture_id: str
     fixture_path: str
     fixture_sha256: str
+    fixture_ae_build_identity: str
     plan_sha256: str
     command: Sequence[str]
     task_name: str
@@ -66,6 +67,7 @@ class UFOExecutionResult:
             "fixture_id": self.fixture_id,
             "fixture_path": self.fixture_path,
             "fixture_sha256": self.fixture_sha256,
+            "fixture_ae_build_identity": self.fixture_ae_build_identity,
             "plan_sha256": self.plan_sha256,
             "command": list(self.command),
             "task_name": self.task_name,
@@ -217,7 +219,7 @@ class UFOMeasuredRunner:
         plan: UFOPlan,
         fixture_path: str | Path,
         fixture_sha256: str,
-    ) -> tuple[UFOPlan, Path]:
+    ) -> tuple[UFOPlan, Path, str]:
         run_id = _validate_run_id(run_id)
         plan = self._require_canonical_plan(plan)
         path = Path(fixture_path).expanduser().resolve()
@@ -266,6 +268,14 @@ class UFOMeasuredRunner:
 
         registered_hash = registry.get("copy_sha256")
         canonical_hash = registry.get("canonical_sha256")
+        certified_ae_build_identity = registry.get("certified_ae_build_identity")
+        if (
+            not isinstance(certified_ae_build_identity, str)
+            or not certified_ae_build_identity.strip()
+        ):
+            raise UFOExecutionError(
+                "Step 03 fixture registry is missing certified AE build identity"
+            )
         if (
             not isinstance(registered_hash, str)
             or not re.fullmatch(r"[0-9a-fA-F]{64}", registered_hash)
@@ -297,7 +307,7 @@ class UFOMeasuredRunner:
         # The fixture must already be open before the measured UFO run. Keep the
         # Follower object bound to AfterFX.exe so opening the fixture itself is
         # not accidentally counted as a measured UFO action.
-        return plan, path
+        return plan, path, certified_ae_build_identity
 
     def prepare_run(
         self,
@@ -308,7 +318,7 @@ class UFOMeasuredRunner:
         fixture_sha256: str,
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
-        execution_plan, bound_fixture_path = self._bind_fixture(
+        execution_plan, bound_fixture_path, fixture_ae_build_identity = self._bind_fixture(
             run_id=run_id,
             plan=plan,
             fixture_path=fixture_path,
@@ -366,6 +376,7 @@ class UFOMeasuredRunner:
                 "fixture_id": plan.fixture_id,
                 "fixture_path": str(bound_fixture_path),
                 "fixture_sha256": fixture_sha256.lower(),
+                "fixture_ae_build_identity": fixture_ae_build_identity,
                 "source_plan_sha256": plan.sha256(),
                 "plan_sha256": plan_hash,
                 "ufo_required_commit": self.lock.get("commit"),
@@ -386,6 +397,7 @@ class UFOMeasuredRunner:
                 "metadata_path": metadata_path,
                 "plan_sha256": plan_hash,
                 "fixture_path": bound_fixture_path,
+                "fixture_ae_build_identity": fixture_ae_build_identity,
             }
         except Exception:
             shutil.rmtree(run_dir, ignore_errors=True)
@@ -404,7 +416,7 @@ class UFOMeasuredRunner:
         fixture_sha256: str,
     ) -> Dict[str, Any]:
         run_id = _validate_run_id(run_id)
-        execution_plan, bound_fixture_path = self._bind_fixture(
+        execution_plan, bound_fixture_path, fixture_ae_build_identity = self._bind_fixture(
             run_id=run_id,
             plan=plan,
             fixture_path=fixture_path,
@@ -427,6 +439,7 @@ class UFOMeasuredRunner:
             "plan_sha256": execution_plan.sha256(),
             "fixture_path": str(bound_fixture_path),
             "fixture_sha256": fixture_sha256.lower(),
+            "fixture_ae_build_identity": fixture_ae_build_identity,
             "command": command,
             "execution_overlay": overlay,
             "note": "Preview only; the source UFO checkout will not be modified.",
@@ -552,6 +565,7 @@ class UFOMeasuredRunner:
                 fixture_id=plan.fixture_id,
                 fixture_path=str(prepared["fixture_path"]),
                 fixture_sha256=fixture_sha256.lower(),
+                fixture_ae_build_identity=prepared["fixture_ae_build_identity"],
                 plan_sha256=prepared["plan_sha256"],
                 command=command,
                 task_name=task_name,
