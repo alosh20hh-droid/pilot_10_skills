@@ -134,7 +134,8 @@ After each build, the system invokes AE Reader and requires:
 5. Expected Reader version/schema.
 6. Saved project file identity matching the exact generated `.aep`.
 7. Every canonical `required_state` field matching the live Reader state.
-8. A SHA-256 hash of the generated binary.
+8. The exact After Effects version/build/language used by the builder matches the Reader evidence.
+9. A SHA-256 hash of the generated binary.
 
 Only then is a certification record written.
 
@@ -190,7 +191,10 @@ The fixture manager:
 3. creates a run-specific directory from an opaque hash of `run_id`,
 4. copies the canonical fixture,
 5. re-hashes the copy,
-6. rejects reused run IDs.
+6. writes a persistent `READY` run-registry record containing the exact copy path/hash and `certified_ae_build_identity`,
+7. rejects reused run IDs.
+
+Step 04 accepts the disposable fixture only when that run-registry provenance matches the actual file bytes.
 
 The disposable copies live under `fixtures/runs/` and are ignored by Git.
 
