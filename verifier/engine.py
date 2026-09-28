@@ -121,6 +121,20 @@ def compare_fixture_state(
             })
         return mismatches
 
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        if not (
+            isinstance(expected, bool)
+            and isinstance(actual, bool)
+            and expected is actual
+        ):
+            mismatches.append({
+                "path": path,
+                "expected": expected,
+                "actual": actual,
+                "reason": "strict boolean/type mismatch",
+            })
+        return mismatches
+
     if _is_number(expected) and _is_number(actual):
         tolerance = _fixture_tolerance(path, policy)
         if abs(float(actual) - float(expected)) > tolerance:
@@ -140,6 +154,84 @@ def compare_fixture_state(
             "reason": "exact mismatch",
         })
     return mismatches
+
+
+def _fixture_state_capabilities(required_state: Dict[str, Any]) -> set[str]:
+    """Infer Reader capabilities needed to prove a canonical fixture state."""
+    capabilities: set[str] = set()
+
+    project = required_state.get("project")
+    if isinstance(project, dict):
+        if "composition_count" in project:
+            capabilities.add("project.composition_count")
+        if "file_path" in project:
+            capabilities.add("project.file_identity")
+
+    if "active_comp" in required_state:
+        capabilities.add("composition.identity")
+        active_comp = required_state.get("active_comp")
+        if isinstance(active_comp, dict):
+            if "width" in active_comp or "height" in active_comp:
+                capabilities.add("composition.dimensions")
+            if "duration_seconds" in active_comp:
+                capabilities.add("composition.duration")
+            if "frame_rate" in active_comp:
+                capabilities.add("composition.frame_rate")
+            if (
+                "current_time_seconds" in active_comp
+                or "current_time_frame" in active_comp
+            ):
+                capabilities.add("composition.current_time")
+
+    if "layers" in required_state:
+        capabilities.add("layer.list")
+        layers = required_state.get("layers")
+        if isinstance(layers, list):
+            for layer in layers:
+                if not isinstance(layer, dict):
+                    continue
+                if "name" in layer:
+                    capabilities.add("layer.identity")
+                if "type" in layer:
+                    capabilities.add("layer.type")
+                if "source_text" in layer:
+                    capabilities.add("layer.source_text")
+                if "index" in layer:
+                    capabilities.add("layer.index")
+                if any(
+                    key in layer
+                    for key in ("in_seconds", "out_seconds", "start_seconds")
+                ):
+                    capabilities.add("layer.timing")
+
+                transform = layer.get("transform")
+                if isinstance(transform, dict):
+                    if "position" in transform:
+                        capabilities.add("layer.transform.position")
+                    if "scale" in transform:
+                        capabilities.add("layer.transform.scale")
+                    if "opacity_percent" in transform:
+                        capabilities.add("layer.transform.opacity")
+
+                properties = layer.get("properties")
+                if isinstance(properties, dict):
+                    opacity = properties.get("opacity")
+                    if isinstance(opacity, dict):
+                        if "keyframe_count" in opacity:
+                            capabilities.add("property.keyframes.count")
+                        if "keyframes" in opacity:
+                            capabilities.add("property.keyframes.time")
+                            capabilities.add("property.keyframes.value")
+
+                if "effects" in layer:
+                    capabilities.add("effect.list")
+                    effects = layer.get("effects")
+                    if isinstance(effects, list) and effects:
+                        capabilities.add("effect.identity.stable_id")
+                        capabilities.add("effect.property.identity")
+                        capabilities.add("effect.property.value")
+
+    return capabilities
 
 
 def validate_evidence(
@@ -492,8 +584,23 @@ class DeterministicVerifier:
             )
 
         supported = set(evidence_check.details.get("supported_capabilities") or [])
+        fixture = self.contract.fixture_for_skill(skill_id)
+        required_state = fixture.get("required_state")
+        if not isinstance(required_state, dict):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "FIXTURE_SPEC_INVALID",
+                "fixture required_state is missing or invalid",
+            )
+
         system_required = {"project.file_identity"}
-        required = set(self.contract.required_capabilities(skill_id)) | system_required
+        fixture_required = _fixture_state_capabilities(required_state)
+        required = (
+            set(self.contract.required_capabilities(skill_id))
+            | fixture_required
+            | system_required
+        )
         missing = sorted(required - supported)
         if missing:
             return PreflightDecision(
@@ -541,16 +648,6 @@ class DeterministicVerifier:
                 details=resolved_calibration,
             )
         runtime.update(resolved_calibration)
-
-        fixture = self.contract.fixture_for_skill(skill_id)
-        required_state = fixture.get("required_state")
-        if not isinstance(required_state, dict):
-            return PreflightDecision(
-                False,
-                "BLOCKED",
-                "FIXTURE_SPEC_INVALID",
-                "fixture required_state is missing or invalid",
-            )
 
         fixture_mismatches = compare_fixture_state(
             required_state,
