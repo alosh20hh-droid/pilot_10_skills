@@ -289,8 +289,8 @@ function readEffects(layer, comp) {
 
     try {
         effects = layer.property("ADBE Effect Parade");
-    } catch (ignored) {
-        effects = null;
+    } catch (error) {
+        throw new Error("Unable to read effect group for layer " + String(layer.name) + ": " + String(error));
     }
 
     if (!effects) {
@@ -300,13 +300,16 @@ function readEffects(layer, comp) {
     var count = 0;
     try {
         count = effects.numProperties;
-    } catch (ignored2) {
-        count = 0;
+    } catch (countError) {
+        throw new Error("Unable to count effects for layer " + String(layer.name) + ": " + String(countError));
     }
 
     for (var i = 1; i <= count; i++) {
         try {
             var effect = effects.property(i);
+            if (!effect) {
+                throw new Error("Effect entry is unavailable at index " + String(i));
+            }
             var effectData = {
                 name: String(effect.name),
                 match_name: String(effect.matchName),
@@ -318,7 +321,12 @@ function readEffects(layer, comp) {
                 effectData.properties.push(readEffectPropertyNode(effect.property(p), comp, 0));
             }
             result.push(effectData);
-        } catch (effectError) {}
+        } catch (effectError) {
+            throw new Error(
+                "Unable to read effect " + String(i) + " for layer "
+                + String(layer.name) + ": " + String(effectError)
+            );
+        }
     }
 
     return result;
