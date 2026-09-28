@@ -763,12 +763,16 @@ class DeterministicVerifier:
         post_supported = set(
             evidence_check.details.get("supported_capabilities") or []
         )
-        if "project.file_identity" not in post_supported:
+        post_required = set(self.contract.required_capabilities(skill_id)) | {
+            "project.file_identity"
+        }
+        missing_post_capabilities = sorted(post_required - post_supported)
+        if missing_post_capabilities:
             return RunDecision(
                 "INCONCLUSIVE",
                 "READER_CAPABILITY_MISSING",
-                "post-state AE Reader evidence lacks project.file_identity",
-                details={"missing_capabilities": ["project.file_identity"]},
+                "post-state AE Reader evidence lacks required capabilities",
+                details={"missing_capabilities": missing_post_capabilities},
             )
 
         expected_fixture_path = preflight.details.get("expected_fixture_path")
