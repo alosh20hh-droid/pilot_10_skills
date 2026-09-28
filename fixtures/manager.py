@@ -135,6 +135,11 @@ class FixtureRepository:
             raise FixtureCertificationError(
                 f"fixture file does not exist: {fixture_path}"
             )
+        expected_canonical_path = self.canonical_path(fixture_id).resolve()
+        if fixture_path != expected_canonical_path:
+            raise FixtureCertificationError(
+                "fixture certification is allowed only for the canonical fixture path"
+            )
 
         evidence_check = validate_evidence(
             evidence,
@@ -314,10 +319,9 @@ class FixtureRepository:
         file_hash = sha256_file(fixture_path)
         size = fixture_path.stat().st_size
 
-        try:
-            canonical_relpath = str(fixture_path.relative_to(self.repo_root.resolve()))
-        except ValueError:
-            canonical_relpath = None
+        canonical_relpath = str(
+            fixture_path.relative_to(self.repo_root.resolve())
+        )
 
         record = {
             "status": "CERTIFIED",
@@ -411,14 +415,15 @@ class FixtureRepository:
             )
 
         record_relpath = record.get("canonical_relpath")
-        if record_relpath is not None:
-            if not isinstance(record_relpath, str):
-                raise FixtureCertificationError("invalid canonical_relpath in certification")
-            expected_relative = str(path.relative_to(self.repo_root.resolve()))
-            if record_relpath != expected_relative:
-                raise FixtureCertificationError(
-                    "certification relative path does not match canonical fixture path"
-                )
+        if not isinstance(record_relpath, str) or not record_relpath:
+            raise FixtureCertificationError(
+                "certification record is missing canonical_relpath"
+            )
+        expected_relative = str(path.relative_to(self.repo_root.resolve()))
+        if record_relpath != expected_relative:
+            raise FixtureCertificationError(
+                "certification relative path does not match canonical fixture path"
+            )
 
         actual_hash = sha256_file(path)
         if actual_hash != record.get("sha256"):
