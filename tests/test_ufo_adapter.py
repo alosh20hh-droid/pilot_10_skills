@@ -527,6 +527,53 @@ class UFORunnerTests(unittest.TestCase):
                     fixture_sha256=fixture_hash,
                 )
 
+    def test_tampered_plan_is_rejected_before_execution(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(root, output_root=root / "runs")
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            fixture, fixture_hash = make_fixture(
+                root,
+                plan.fixture_id,
+                "run-plan-tamper",
+            )
+            tampered_payload = plan.to_dict()
+            tampered_payload["steps"] = list(tampered_payload["steps"]) + [
+                "Click an extra unrelated UI control."
+            ]
+            tampered_plan = type(plan)(
+                skill_id=plan.skill_id,
+                fixture_id=plan.fixture_id,
+                payload=tampered_payload,
+            )
+
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id="run-plan-tamper",
+                    plan=tampered_plan,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
+                )
+
+    def test_rebound_plan_object_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            runner = UFOMeasuredRunner(root, output_root=root / "runs")
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-004")
+            fixture, fixture_hash = make_fixture(
+                root,
+                plan.fixture_id,
+                "run-object-tamper",
+            )
+            rebound = plan.bind_object("cmd.exe")
+            with self.assertRaises(UFOExecutionError):
+                runner.prepare_run(
+                    run_id="run-object-tamper",
+                    plan=rebound,
+                    fixture_path=fixture,
+                    fixture_sha256=fixture_hash,
+                )
+
     def test_wrong_fixture_hash_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
