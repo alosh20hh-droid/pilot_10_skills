@@ -155,6 +155,7 @@ python -m verifier.cli calibrate-pilot ^
   --fixture-id FX-002-COMP-EMPTY ^
   --run-id CAL-LIVE-001 ^
   --request-id <the-reader-request-id> ^
+  --fixture-path "<exact-canonical-fixture-path>" ^
   --fresh-after <run-start-timestamp>
 ```
 
