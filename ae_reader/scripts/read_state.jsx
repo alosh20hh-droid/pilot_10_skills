@@ -389,12 +389,22 @@ function readLayer(layer, comp) {
 
 function countCompositions(project) {
     var count = 0;
-    for (var i = 1; i <= project.numItems; i++) {
+    var total = project.numItems;
+    for (var i = 1; i <= total; i++) {
+        var item = null;
         try {
-            if (project.item(i) instanceof CompItem) {
-                count++;
-            }
-        } catch (ignored) {}
+            item = project.item(i);
+        } catch (itemError) {
+            throw new Error(
+                "Unable to inspect project item " + String(i) + ": " + String(itemError)
+            );
+        }
+        if (!item) {
+            throw new Error("Project item is unavailable at index " + String(i));
+        }
+        if (item instanceof CompItem) {
+            count++;
+        }
     }
     return count;
 }
