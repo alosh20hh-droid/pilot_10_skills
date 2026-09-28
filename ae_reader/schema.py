@@ -32,6 +32,16 @@ def _number_or_none(value: Any, field_name: str) -> Optional[float]:
     return number
 
 
+def _numeric_component(value: Any) -> Optional[float]:
+    if (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    ):
+        return float(value)
+    return None
+
+
 def _int_or_none(value: Any, field_name: str) -> Optional[int]:
     if value is None:
         return None
@@ -214,14 +224,14 @@ class AEPositionSnapshot:
     def current_xy(self) -> tuple[Optional[float], Optional[float]]:
         if self.mode == "combined" and self.property and isinstance(self.property.current_value, list):
             values = self.property.current_value
-            x = float(values[0]) if len(values) > 0 and isinstance(values[0], (int, float)) else None
-            y = float(values[1]) if len(values) > 1 and isinstance(values[1], (int, float)) else None
+            x = _numeric_component(values[0]) if len(values) > 0 else None
+            y = _numeric_component(values[1]) if len(values) > 1 else None
             return x, y
         if self.mode == "separated":
             x_prop = self.separated.get("ADBE Position_0")
             y_prop = self.separated.get("ADBE Position_1")
-            x = float(x_prop.current_value) if x_prop and isinstance(x_prop.current_value, (int, float)) else None
-            y = float(y_prop.current_value) if y_prop and isinstance(y_prop.current_value, (int, float)) else None
+            x = _numeric_component(x_prop.current_value) if x_prop else None
+            y = _numeric_component(y_prop.current_value) if y_prop else None
             return x, y
         return None, None
 
@@ -388,9 +398,9 @@ class AELayerSnapshot:
     def to_pilot_dict(self) -> Dict[str, Any]:
         x, y = self.position.current_xy()
         scale_value = self.scale.current_value if isinstance(self.scale.current_value, list) else []
-        scale_x = float(scale_value[0]) if len(scale_value) > 0 and isinstance(scale_value[0], (int, float)) else None
-        scale_y = float(scale_value[1]) if len(scale_value) > 1 and isinstance(scale_value[1], (int, float)) else None
-        opacity_value = self.opacity.current_value if isinstance(self.opacity.current_value, (int, float)) else None
+        scale_x = _numeric_component(scale_value[0]) if len(scale_value) > 0 else None
+        scale_y = _numeric_component(scale_value[1]) if len(scale_value) > 1 else None
+        opacity_value = _numeric_component(self.opacity.current_value)
         opacity_keys = [
             {"frame": key.frame, "time_seconds": key.time_seconds, "value": key.value}
             for key in self.opacity.keys
@@ -426,7 +436,7 @@ class AELayerSnapshot:
             "transform": {
                 "position": {"x": x, "y": y},
                 "scale": {"x_percent": scale_x, "y_percent": scale_y},
-                "opacity_percent": float(opacity_value) if opacity_value is not None else None,
+                "opacity_percent": opacity_value,
             },
             "properties": {
                 "opacity": {
