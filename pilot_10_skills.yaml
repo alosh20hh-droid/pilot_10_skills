@@ -172,6 +172,8 @@ ae_reader_contract:
     - "schema_version"
     - "supported_capabilities"
   known_capability_ids:
+    - "application.version"
+    - "application.language"
     - "project.composition_count"
     - "project.file_identity"
     - "composition.identity"
