@@ -271,6 +271,22 @@ class FixtureRepositoryTests(unittest.TestCase):
                 min_captured_at=10,
             )
 
+    def test_certification_rejects_noncanonical_output_path(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.root / "outside-canonical.aep"
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=synthetic_builder_result(fixture_id, path),
+            )
+
     def test_wrong_project_file_identity_is_rejected(self):
         fixture_id = "FX-004-POSITION-READY"
         path = self.repository.canonical_path(fixture_id)
@@ -451,6 +467,17 @@ class FixtureRepositoryTests(unittest.TestCase):
         )
         with self.assertRaises(FixtureCertificationError):
             self.repository.verify_canonical(fixture_id)
+
+    def test_missing_canonical_relpath_invalidates_certification(self):
+        _, _ = self._certify()
+        record_path = self.repository.certification_path(
+            "FX-004-POSITION-READY"
+        )
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["canonical_relpath"] = None
+        record_path.write_text(json.dumps(record), encoding="utf-8")
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.verify_canonical("FX-004-POSITION-READY")
 
     def test_tampered_canonical_file_is_rejected(self):
         path, _ = self._certify()
