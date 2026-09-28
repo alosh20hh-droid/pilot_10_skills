@@ -149,7 +149,7 @@ class AEPropertySnapshot:
         varying = value.get("is_time_varying", False)
         if not isinstance(varying, bool):
             raise ValueError("invalid time-varying flag")
-        keys_raw = value.get("keys") or []
+        keys_raw = value.get("keys")
         if not isinstance(keys_raw, list):
             raise ValueError("invalid property keys")
         keys = [AEPropertyKey.from_dict(item) for item in keys_raw]
@@ -253,8 +253,8 @@ class AEEffectPropertySnapshot:
         num_keys = value.get("num_keys", 0)
         if not isinstance(num_keys, int) or isinstance(num_keys, bool) or num_keys < 0:
             raise ValueError("invalid effect property key count")
-        keys_raw = value.get("keys") or []
-        children_raw = value.get("properties") or []
+        keys_raw = value.get("keys")
+        children_raw = value.get("properties")
         if not isinstance(keys_raw, list) or not isinstance(children_raw, list):
             raise ValueError("invalid effect property containers")
         keys = [AEPropertyKey.from_dict(item) for item in keys_raw]
@@ -299,7 +299,7 @@ class AEEffectSnapshot:
         name = value.get("name")
         match_name = value.get("match_name")
         enabled = value.get("enabled")
-        props = value.get("properties") or []
+        props = value.get("properties")
         if not isinstance(name, str) or not isinstance(match_name, str) or not isinstance(enabled, bool):
             raise ValueError("invalid effect identity")
         if not isinstance(props, list):
@@ -363,7 +363,7 @@ class AELayerSnapshot:
         source_text = value.get("source_text")
         if source_text is not None and not isinstance(source_text, str):
             raise ValueError("invalid source text")
-        effects_raw = value.get("effects") or []
+        effects_raw = value.get("effects")
         if not isinstance(effects_raw, list):
             raise ValueError("invalid layer effects")
         return cls(
