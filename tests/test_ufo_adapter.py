@@ -283,6 +283,29 @@ class UFORunnerTests(unittest.TestCase):
                     arm_measured_execution=False,
                 )
 
+
+    def test_execution_rejects_non_finite_or_non_positive_timeout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            runner = UFOMeasuredRunner(
+                temp,
+                output_root=Path(temp) / "runs",
+            )
+            plan = compile_skill_plan(CONTRACT, "AE-PILOT-001")
+            fixture, fixture_hash = make_fixture(
+                Path(temp),
+                plan.fixture_id,
+            )
+            for timeout in (0, -1, float("nan"), float("inf")):
+                with self.assertRaises(UFOExecutionError):
+                    runner.execute(
+                        run_id="run-timeout",
+                        plan=plan,
+                        fixture_path=fixture,
+                        fixture_sha256=fixture_hash,
+                        arm_measured_execution=True,
+                        timeout=timeout,
+                    )
+
     def test_prepare_run_writes_plan_and_rejects_run_id_reuse(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
