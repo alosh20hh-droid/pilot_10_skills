@@ -347,6 +347,14 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("Unable to read effect ", source)
         self.assertNotIn("catch (effectError) {}", source)
 
+    def test_jsx_fails_closed_when_effect_group_is_unavailable(self):
+        source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
+        self.assertIn("Effect group is unavailable for layer", source)
+        self.assertNotIn(
+            "if (!effects) {\n        return result;\n    }",
+            source,
+        )
+
     def test_jsx_uses_local_json_parser(self):
         source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
         self.assertIn('#include "json2.jsx"', source)
