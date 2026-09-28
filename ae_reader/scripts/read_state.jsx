@@ -38,7 +38,17 @@ function frameForTime(timeSeconds, comp) {
         if (!comp || !comp.frameDuration || comp.frameDuration <= 0) {
             return null;
         }
-        return Math.round(timeSeconds / comp.frameDuration);
+        var rawFrame = timeSeconds / comp.frameDuration;
+        var nearestFrame = Math.round(rawFrame);
+        /*
+         * Do not hide sub-frame keyframes by rounding them onto an integer
+         * frame. A tiny epsilon only absorbs floating-point representation
+         * noise for values that are actually frame-aligned.
+         */
+        if (Math.abs(rawFrame - nearestFrame) > 0.000001) {
+            return null;
+        }
+        return nearestFrame;
     } catch (ignored) {
         return null;
     }
