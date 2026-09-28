@@ -181,6 +181,25 @@ class SchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             AEStateSnapshot.from_dict(data)
 
+
+    def test_null_layer_effects_collection_is_rejected(self):
+        data = sample_response()
+        data["layers"][0]["effects"] = None
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_null_effect_property_children_are_rejected(self):
+        data = sample_response()
+        data["layers"][0]["effects"][0]["properties"][0]["properties"] = None
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_null_property_key_collection_is_rejected(self):
+        data = sample_response()
+        data["layers"][0]["opacity"]["keys"] = None
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
     def test_non_string_reader_error_is_rejected(self):
         data = sample_response()
         data["errors"] = [123]
@@ -320,6 +339,13 @@ class SafetyTests(unittest.TestCase):
             "return Math.round(timeSeconds / comp.frameDuration);",
             source,
         )
+
+
+    def test_jsx_effect_enumeration_fails_closed(self):
+        source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
+        self.assertIn("Unable to count effects for layer", source)
+        self.assertIn("Unable to read effect ", source)
+        self.assertNotIn("catch (effectError) {}", source)
 
     def test_jsx_uses_local_json_parser(self):
         source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
