@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     execute.add_argument("--run-id", required=True)
     execute.add_argument("--fixture-path", required=True)
     execute.add_argument("--fixture-sha256", required=True)
-    execute.add_argument("--timeout", type=float, default=None)
+    execute.add_argument("--timeout", type=float, default=900.0)
     execute.add_argument(
         "--arm-measured-execution",
         action="store_true",
