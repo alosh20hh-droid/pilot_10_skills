@@ -1192,6 +1192,26 @@ class CalibrationTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertFalse(result["satisfies_pilot_gate"])
 
+    def test_pilot_calibration_rejects_non_finite_freshness_boundary(self):
+        c = contract()
+        evidence = evidence_for(
+            fixture_state("AE-PILOT-002"),
+            run_id="cal-live-run",
+            request_id="cal-live-request",
+            captured_at=20,
+        )
+        result = run_pilot_calibration(
+            c,
+            evidence=evidence,
+            fixture_id="FX-002-COMP-EMPTY",
+            expected_run_id="cal-live-run",
+            expected_request_id="cal-live-request",
+            expected_fixture_path=TEST_FIXTURE_PATH,
+            min_captured_at=float("nan"),
+        )
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["satisfies_pilot_gate"])
+
     def test_pilot_calibration_rejects_stale_canonical_evidence(self):
         c = contract()
         evidence = evidence_for(
