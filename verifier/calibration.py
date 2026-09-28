@@ -49,6 +49,13 @@ def _fresh_evidence(contract: PilotContract, *, captured_at: float = 20.0) -> Di
                 contract.ae_reader_contract.get("known_capability_ids") or []
             ),
         },
+        "application": {
+            "name": "After Effects",
+            "version": "26.0",
+            "build_name": "calibration",
+            "build_number": 1,
+            "language": "en-US",
+        },
         "state": _canonical_state(),
         "errors": [],
     }
