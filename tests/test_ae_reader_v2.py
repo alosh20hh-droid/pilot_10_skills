@@ -347,6 +347,11 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("Unable to read effect ", source)
         self.assertNotIn("catch (effectError) {}", source)
 
+    def test_jsx_fails_closed_when_project_item_enumeration_fails(self):
+        source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
+        self.assertIn("Unable to inspect project item", source)
+        self.assertIn("Project item is unavailable at index", source)
+
     def test_jsx_fails_closed_when_effect_group_is_unavailable(self):
         source = Path("ae_reader/scripts/read_state.jsx").read_text(encoding="utf-8")
         self.assertIn("Effect group is unavailable for layer", source)
