@@ -1,7 +1,7 @@
 #include "json2.jsx"
 
 /*
- * AE Reader v2.0.0
+ * AE Reader v2.1.0
  * Read-only After Effects state export for the pilot verification lab.
  * Project mutation APIs are intentionally absent from this file.
  */
