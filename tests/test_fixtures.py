@@ -357,6 +357,46 @@ class FixtureRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(record["status"], "CERTIFIED")
 
+
+    def test_certification_record_for_different_fixture_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        self._certify(fixture_id)
+        record_path = self.repository.certification_path(fixture_id)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["fixture_id"] = "FX-005-SCALE-READY"
+        record_path.write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.verify_canonical(fixture_id)
+
+    def test_invalid_certification_hash_format_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        self._certify(fixture_id)
+        record_path = self.repository.certification_path(fixture_id)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["sha256"] = "not-a-sha256"
+        record_path.write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.verify_canonical(fixture_id)
+
+    def test_certification_reader_version_mismatch_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        self._certify(fixture_id)
+        record_path = self.repository.certification_path(fixture_id)
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["reader_version"] = "0.0.0"
+        record_path.write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.verify_canonical(fixture_id)
+
     def test_tampered_canonical_file_is_rejected(self):
         path, _ = self._certify()
         path.write_bytes(path.read_bytes() + b"TAMPER")
