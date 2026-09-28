@@ -548,7 +548,10 @@ class FixtureRepository:
                 pass
             raise
 
-        return dict(ready_record)
+        result = dict(ready_record)
+        # Keep the public Step 03 API stable for callers that consume "path".
+        result["path"] = result["copy_path"]
+        return result
 
     def remove_run_copy(self, run_id: str) -> None:
         if not isinstance(run_id, str) or not run_id:
