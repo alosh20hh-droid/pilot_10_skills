@@ -371,6 +371,38 @@ class FixtureRepository:
             raise FixtureCertificationError(
                 f"fixture is not certified: {fixture_id}"
             )
+        if record.get("fixture_id") != fixture_id:
+            raise FixtureCertificationError(
+                "certification record belongs to a different fixture"
+            )
+        record_hash = record.get("sha256")
+        if (
+            not isinstance(record_hash, str)
+            or re.fullmatch(r"[0-9a-f]{64}", record_hash) is None
+        ):
+            raise FixtureCertificationError(
+                "certification record contains an invalid SHA-256"
+            )
+        record_size = record.get("size_bytes")
+        if (
+            not isinstance(record_size, int)
+            or isinstance(record_size, bool)
+            or record_size <= 0
+        ):
+            raise FixtureCertificationError(
+                "certification record contains an invalid file size"
+            )
+        if record.get("reader_version") != self.contract.expected_reader_version():
+            raise FixtureCertificationError(
+                "certification record Reader version no longer matches the pilot contract"
+            )
+        if (
+            record.get("reader_schema_version")
+            != self.contract.expected_reader_schema_version()
+        ):
+            raise FixtureCertificationError(
+                "certification record Reader schema no longer matches the pilot contract"
+            )
 
         path = self.canonical_path(fixture_id).resolve()
         if not path.is_file():
