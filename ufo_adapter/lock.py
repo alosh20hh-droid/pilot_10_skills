@@ -153,12 +153,20 @@ def inspect_checkout(
     *,
     lock: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    """
+    Inspect an existing local UFO repository without requiring its current
+    branch/HEAD to equal the measured execution revision.
+
+    Measured execution always uses a detached worktree at the pinned commit.
+    Therefore the source checkout may be on another branch or contain local
+    work, provided the pinned commit object exists and its audited blobs match.
+    """
     lock = lock or load_upstream_lock()
     repo = Path(checkout).expanduser().resolve()
     if not repo.is_dir():
         raise UFOLockError(f"UFO checkout directory not found: {repo}")
 
-    head = _run_git(repo, "rev-parse", "HEAD")
+    source_head = _run_git(repo, "rev-parse", "HEAD")
     status = _run_git(repo, "status", "--porcelain")
     origin = ""
     try:
@@ -166,49 +174,55 @@ def inspect_checkout(
     except UFOLockError:
         origin = ""
 
-    required_files = dict(lock.get("required_files") or {})
-    missing_files = [path for path in required_files if not (repo / path).is_file()]
-    blob_mismatches = []
-    for path, expected_blob in required_files.items():
-        if path in missing_files:
-            continue
-        try:
-            actual_blob = _run_git(repo, "rev-parse", f"HEAD:{path}")
-        except UFOLockError:
-            blob_mismatches.append({
-                "path": path,
-                "expected": expected_blob,
-                "actual": None,
-            })
-            continue
-        if actual_blob != expected_blob:
-            blob_mismatches.append({
-                "path": path,
-                "expected": expected_blob,
-                "actual": actual_blob,
-            })
-
     expected_commit = lock.get("commit")
-    commit_matches = isinstance(expected_commit, str) and head == expected_commit
+    pinned_commit_available = False
+    if isinstance(expected_commit, str):
+        try:
+            resolved = _run_git(repo, "rev-parse", f"{expected_commit}^{{commit}}")
+            pinned_commit_available = resolved == expected_commit
+        except UFOLockError:
+            pinned_commit_available = False
+
+    required_files = dict(lock.get("required_files") or {})
+    missing_files = []
+    blob_mismatches = []
+
+    if pinned_commit_available:
+        for path, expected_blob in required_files.items():
+            try:
+                actual_blob = _run_git(
+                    repo,
+                    "rev-parse",
+                    f"{expected_commit}:{path}",
+                )
+            except UFOLockError:
+                missing_files.append(path)
+                continue
+            if actual_blob != expected_blob:
+                blob_mismatches.append({
+                    "path": path,
+                    "expected": expected_blob,
+                    "actual": actual_blob,
+                })
+    else:
+        missing_files = list(required_files)
 
     return {
         "checkout": str(repo),
-        "head": head,
+        "source_head": source_head,
         "expected_commit": expected_commit,
-        "commit_matches": commit_matches,
-        "clean_worktree": status == "",
-        "worktree_changes": status.splitlines() if status else [],
+        "pinned_commit_available": pinned_commit_available,
+        "source_clean_worktree": status == "",
+        "source_worktree_changes": status.splitlines() if status else [],
         "origin": origin,
         "missing_audited_files": missing_files,
         "blob_mismatches": blob_mismatches,
         "valid": (
-            commit_matches
-            and status == ""
+            pinned_commit_available
             and not missing_files
             and not blob_mismatches
         ),
     }
-
 
 def require_locked_checkout(
     checkout: str | Path,
@@ -217,9 +231,14 @@ def require_locked_checkout(
 ) -> Dict[str, Any]:
     result = inspect_checkout(checkout, lock=lock)
 
+    if not result["pinned_commit_available"]:
+        raise UFOLockError(
+            "UFO checkout does not contain the pinned measured-execution commit "
+            f"{result['expected_commit']}"
+        )
     if result["missing_audited_files"]:
         raise UFOLockError(
-            "UFO checkout is missing audited files: "
+            "pinned UFO commit is missing audited files: "
             + ", ".join(result["missing_audited_files"])
         )
     if result.get("blob_mismatches"):
@@ -227,16 +246,8 @@ def require_locked_checkout(
             item["path"] for item in result["blob_mismatches"]
         )
         raise UFOLockError(
-            "UFO audited file blobs do not match the pinned upstream: " + details
-        )
-    if not result["commit_matches"]:
-        raise UFOLockError(
-            f"UFO checkout HEAD {result['head']} does not match locked commit "
-            f"{result['expected_commit']}"
-        )
-    if not result["clean_worktree"]:
-        raise UFOLockError(
-            "UFO checkout has uncommitted changes; measured execution requires a clean checkout"
+            "pinned UFO audited blobs do not match the locked upstream: " + details
         )
 
     return result
+
