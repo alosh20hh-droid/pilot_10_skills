@@ -4,6 +4,8 @@ import shutil
 import tempfile
 import time
 import unittest
+
+import yaml
 from pathlib import Path
 
 from fixtures import (
@@ -103,6 +105,59 @@ class FixtureSpecTests(unittest.TestCase):
     def test_effect_fixture_starts_without_effects(self):
         plan = compile_fixture_plan(self.contract, "FX-010-EFFECT-READY")
         self.assertEqual(plan.required_state["layers"][0]["effects"], [])
+
+
+    def _mutated_contract(self, fixture_id, mutate):
+        raw = copy.deepcopy(self.contract.raw)
+        fixture = next(
+            item for item in raw["fixture_specs"] if item["id"] == fixture_id
+        )
+        mutate(fixture["required_state"])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "pilot.yaml"
+            path.write_text(
+                yaml.safe_dump(raw, sort_keys=False),
+                encoding="utf-8",
+            )
+            return load_contract(path)
+
+    def test_non_finite_fixture_numeric_value_is_rejected(self):
+        mutated = self._mutated_contract(
+            "FX-004-POSITION-READY",
+            lambda state: state["layers"][0]["transform"]["position"].__setitem__(
+                "x", float("nan")
+            ),
+        )
+        with self.assertRaises(Exception):
+            compile_fixture_plan(mutated, "FX-004-POSITION-READY")
+
+    def test_layer_timing_outside_composition_is_rejected(self):
+        mutated = self._mutated_contract(
+            "FX-004-POSITION-READY",
+            lambda state: state["layers"][0].__setitem__("out_seconds", 9),
+        )
+        with self.assertRaises(Exception):
+            compile_fixture_plan(mutated, "FX-004-POSITION-READY")
+
+    def test_duplicate_canonical_layer_names_are_rejected(self):
+        def mutate(state):
+            duplicate = copy.deepcopy(state["layers"][0])
+            duplicate["index"] = 2
+            state["layers"].append(duplicate)
+
+        mutated = self._mutated_contract("FX-009-REORDER-READY", mutate)
+        with self.assertRaises(Exception):
+            compile_fixture_plan(mutated, "FX-009-REORDER-READY")
+
+    def test_comp_time_seconds_and_frame_must_agree(self):
+        mutated = self._mutated_contract(
+            "FX-002-COMP-EMPTY",
+            lambda state: state["active_comp"].__setitem__(
+                "current_time_frame", 30
+            ),
+        )
+        with self.assertRaises(Exception):
+            compile_fixture_plan(mutated, "FX-002-COMP-EMPTY")
 
     def test_fixture_build_request_is_explicitly_disposable(self):
         plan = compile_fixture_plan(self.contract, "FX-004-POSITION-READY")
