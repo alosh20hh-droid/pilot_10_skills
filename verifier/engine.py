@@ -32,6 +32,33 @@ def _is_number(value: Any) -> bool:
     )
 
 
+def _normalize_locale(value: Any) -> Optional[str]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip().replace("_", "-").lower()
+
+
+def _parse_major_version(value: Any) -> Optional[int]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    prefix = value.strip().split(".", 1)[0]
+    return int(prefix) if prefix.isdigit() else None
+
+
+def _application_build_identity(application: Dict[str, Any]) -> Optional[str]:
+    version = application.get("version")
+    build_name = application.get("build_name")
+    build_number = application.get("build_number")
+    if not isinstance(version, str) or not version.strip():
+        return None
+    if not isinstance(build_name, str) or not build_name.strip():
+        return None
+    if not _is_number(build_number):
+        return None
+    number = int(build_number) if float(build_number).is_integer() else float(build_number)
+    return f"{version.strip()}|{build_name.strip()}|{number}"
+
+
 def _fixture_tolerance(path: str, policy: Dict[str, Any]) -> float:
     lowered = path.lower()
     if any(token in lowered for token in ("x_percent", "y_percent", "opacity_percent")):
@@ -254,6 +281,7 @@ def validate_evidence(
         "reader_version",
         "schema_version",
         "capabilities",
+        "application",
         "state",
         "errors",
     )
@@ -360,6 +388,32 @@ def validate_evidence(
             details={"errors": list(errors)},
         )
 
+    application = evidence.get("application")
+    if not isinstance(application, dict):
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "reader application metadata must be an object",
+        )
+    if application.get("name") != "After Effects":
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "reader application name is invalid",
+        )
+    if _application_build_identity(application) is None:
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "reader application build metadata is incomplete",
+        )
+    if _normalize_locale(application.get("language")) is None:
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "reader application language is missing",
+        )
+
     state = evidence.get("state")
     if not isinstance(state, dict):
         return EvidenceValidation(False, "MALFORMED_EVIDENCE", "reader state must be an object")
@@ -371,6 +425,8 @@ def validate_evidence(
             "request_id": request_id,
             "captured_at": float(captured_at),
             "supported_capabilities": list(supported),
+            "application": dict(application),
+            "application_build_identity": _application_build_identity(application),
         },
     )
 
@@ -594,7 +650,11 @@ class DeterministicVerifier:
                 "fixture required_state is missing or invalid",
             )
 
-        system_required = {"project.file_identity"}
+        system_required = {
+            "project.file_identity",
+            "application.version",
+            "application.language",
+        }
         fixture_required = _fixture_state_capabilities(required_state)
         required = (
             set(self.contract.required_capabilities(skill_id))
@@ -609,6 +669,59 @@ class DeterministicVerifier:
                 "READER_CAPABILITY_MISSING",
                 "required AE Reader capabilities are absent",
                 details={"missing_capabilities": missing},
+            )
+
+        application = evidence_check.details.get("application") or {}
+        reader_major = _parse_major_version(application.get("version"))
+        reader_language = _normalize_locale(application.get("language"))
+        reader_build_identity = evidence_check.details.get("application_build_identity")
+        expected_language = self.contract.environment_contract.get("after_effects", {}).get(
+            "required_language"
+        )
+
+        if reader_major != environment.get("ae_major_version"):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "READER_ENVIRONMENT_MISMATCH",
+                "AE Reader application version does not match preflight environment evidence",
+                details={
+                    "reader_major_version": reader_major,
+                    "environment_major_version": environment.get("ae_major_version"),
+                },
+            )
+        if reader_language != _normalize_locale(environment.get("ae_language")):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "READER_ENVIRONMENT_MISMATCH",
+                "AE Reader language does not match preflight environment evidence",
+                details={
+                    "reader_language": application.get("language"),
+                    "environment_language": environment.get("ae_language"),
+                },
+            )
+        if reader_language != _normalize_locale(expected_language):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "READER_ENVIRONMENT_MISMATCH",
+                "AE Reader language does not match the locked pilot language",
+                details={
+                    "reader_language": application.get("language"),
+                    "required_language": expected_language,
+                },
+            )
+        if reader_build_identity != environment.get("ae_build"):
+            return PreflightDecision(
+                False,
+                "BLOCKED",
+                "READER_ENVIRONMENT_MISMATCH",
+                "AE Reader build identity does not match preflight environment evidence",
+                details={
+                    "reader_build": reader_build_identity,
+                    "environment_build": environment.get("ae_build"),
+                },
             )
 
         project_state = (evidence_check.state or {}).get("project")
@@ -703,6 +816,8 @@ class DeterministicVerifier:
                 "pre_captured_at": float(evidence_check.details["captured_at"]),
                 "fixture_id": fixture.get("id"),
                 "runtime": runtime,
+                "reader_build_identity": reader_build_identity,
+                "reader_language": reader_language,
                 **env_details,
             },
         )
@@ -861,7 +976,9 @@ class DeterministicVerifier:
             evidence_check.details.get("supported_capabilities") or []
         )
         post_required = set(self.contract.required_capabilities(skill_id)) | {
-            "project.file_identity"
+            "project.file_identity",
+            "application.version",
+            "application.language",
         }
         missing_post_capabilities = sorted(post_required - post_supported)
         if missing_post_capabilities:
@@ -870,6 +987,30 @@ class DeterministicVerifier:
                 "READER_CAPABILITY_MISSING",
                 "post-state AE Reader evidence lacks required capabilities",
                 details={"missing_capabilities": missing_post_capabilities},
+            )
+
+        post_application = evidence_check.details.get("application") or {}
+        post_build_identity = evidence_check.details.get("application_build_identity")
+        post_language = _normalize_locale(post_application.get("language"))
+        if post_build_identity != preflight.details.get("reader_build_identity"):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "POST_APPLICATION_BUILD_MISMATCH",
+                "After Effects build changed between preflight and post-state evidence",
+                details={
+                    "preflight_build": preflight.details.get("reader_build_identity"),
+                    "post_build": post_build_identity,
+                },
+            )
+        if post_language != preflight.details.get("reader_language"):
+            return RunDecision(
+                "INCONCLUSIVE",
+                "POST_APPLICATION_LANGUAGE_MISMATCH",
+                "After Effects language changed between preflight and post-state evidence",
+                details={
+                    "preflight_language": preflight.details.get("reader_language"),
+                    "post_language": post_application.get("language"),
+                },
             )
 
         expected_fixture_path = preflight.details.get("expected_fixture_path")
