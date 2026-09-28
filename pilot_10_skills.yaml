@@ -696,7 +696,7 @@ skills:
     enabled_when:
       - "AE Reader manifest includes effect.list"
       - "AE Reader manifest includes effect.property.value"
-      - "A stable effect identity for the installed Gaussian Blur variant has been resolved and stored in runtime calibration."
+      - "Stable effect and property identities for the installed Gaussian Blur variant have been resolved and stored in runtime calibration."
     required_reader_capabilities:
       - "effect.list"
       - "layer.list"
@@ -707,7 +707,8 @@ skills:
     preferred_reader_capabilities: []
     runtime_calibration:
       stable_effect_id: null
-      rule: "Do not hard-code an unverified internal effect identifier. Resolve it from the installed AE build before enabling this skill."
+      stable_property_id: null
+      rule: "Do not hard-code unverified internal identifiers. Resolve both the installed Gaussian Blur effect identity and its Blurriness property identity from the installed AE build before enabling this skill."
     goal: "Apply the installed Gaussian Blur effect variant to PILOT_TEXT through the UI and set its Blurriness value to 25."
     measured_ui_steps:
       - "Select PILOT_TEXT."
@@ -718,7 +719,7 @@ skills:
         - {path: "layer[name=PILOT_TEXT].effects", op: "count_eq", value: 0}
       post:
         - {path: "layer[name=PILOT_TEXT].effects", op: "contains_effect_stable_id", runtime_key: "stable_effect_id"}
-        - {path: "layer[name=PILOT_TEXT].effects[stable_id=stable_effect_id].property[display_name=Blurriness].value", op: "approx", value: 25, tolerance: 0.001}
+        - {path: "layer[name=PILOT_TEXT].effects[stable_id=stable_effect_id].property[stable_id=stable_property_id].value", op: "approx", value: 25, tolerance: 0.001}
     diagnose_on_failure:
       - "effect display name changed"
       - "effect search or menu path changed"
