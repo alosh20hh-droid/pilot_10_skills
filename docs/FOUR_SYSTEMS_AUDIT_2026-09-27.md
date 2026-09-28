@@ -1,5 +1,7 @@
 # Four-System Audit — 2026-09-27
 
+> Historical snapshot: this audit reflects the repository state on 2026-09-27. A deeper 2026-09-28 audit supersedes its test-count and hardening details. Do not treat the "91 tests" count below as the current suite size.
+
 Scope:
 
 1. AE Reader
