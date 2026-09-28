@@ -316,6 +316,12 @@ def validate_evidence(
     captured_at = evidence.get("captured_at")
     if not _is_number(captured_at):
         return EvidenceValidation(False, "MALFORMED_EVIDENCE", "reader captured_at is missing or invalid")
+    if min_captured_at is not None and not _is_number(min_captured_at):
+        return EvidenceValidation(
+            False,
+            "MALFORMED_EVIDENCE",
+            "freshness boundary is missing or invalid",
+        )
     if min_captured_at is not None and float(captured_at) <= float(min_captured_at):
         return EvidenceValidation(
             False,
