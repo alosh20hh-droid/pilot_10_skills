@@ -80,6 +80,7 @@ def make_fixture(root: Path, fixture_id: str, run_id: str = "run-1"):
                 "fixture_id": fixture_id,
                 "canonical_sha256": fixture_hash,
                 "copy_sha256": fixture_hash,
+                "certified_ae_build_identity": "26.0|test-build|1",
                 "copy_path": str(path.resolve()),
                 "created_at": 1.0,
                 "disposable": True,
@@ -460,6 +461,10 @@ class UFORunnerTests(unittest.TestCase):
             )
             self.assertFalse((root / "runs").exists())
             self.assertEqual(preview["plan_sha256"], plan.sha256())
+            self.assertEqual(
+                preview["fixture_ae_build_identity"],
+                "26.0|test-build|1",
+            )
             prepared = runner.prepare_run(
                 run_id="preview-run-1",
                 plan=plan,
