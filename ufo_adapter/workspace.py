@@ -147,10 +147,15 @@ class UFOWorkspaceManager:
             },
         }
 
-    def _git(self, *args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
+    @staticmethod
+    def _git_at(
+        repo: str | Path,
+        *args: str,
+        timeout: float = 60.0,
+    ) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
-                ["git", "-C", str(self.source_checkout), *args],
+                ["git", "-C", str(repo), *args],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -158,6 +163,59 @@ class UFOWorkspaceManager:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise UFOWorkspaceError(f"git worktree command failed: {exc}") from exc
+
+    def _git(self, *args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
+        return self._git_at(self.source_checkout, *args, timeout=timeout)
+
+    @classmethod
+    def _require_clean_pinned_worktree(
+        cls,
+        target: Path,
+        commit: str,
+    ) -> None:
+        head = cls._git_at(target, "rev-parse", "HEAD")
+        if head.returncode != 0 or head.stdout.strip() != commit:
+            raise UFOWorkspaceError(
+                "detached UFO worktree is not at the requested pinned commit"
+            )
+        status = cls._git_at(target, "status", "--porcelain")
+        if status.returncode != 0 or status.stdout.strip():
+            raise UFOWorkspaceError(
+                "detached UFO worktree was modified during checkout"
+            )
+
+    @classmethod
+    def _require_only_expected_overlay_changes(cls, target: Path) -> None:
+        tracked = cls._git_at(target, "diff", "--name-only")
+        if tracked.returncode != 0:
+            raise UFOWorkspaceError("unable to inspect UFO overlay tracked changes")
+        tracked_paths = {
+            line.strip().replace("\\", "/")
+            for line in tracked.stdout.splitlines()
+            if line.strip()
+        }
+        if tracked_paths != {"config/ufo/mcp.yaml"}:
+            raise UFOWorkspaceError(
+                "isolated UFO worktree contains unexpected tracked changes"
+            )
+
+        untracked = cls._git_at(
+            target,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+        )
+        if untracked.returncode != 0:
+            raise UFOWorkspaceError("unable to inspect UFO overlay untracked files")
+        untracked_paths = {
+            line.strip().replace("\\", "/")
+            for line in untracked.stdout.splitlines()
+            if line.strip()
+        }
+        if untracked_paths != {"config/ufo/system_test.yaml"}:
+            raise UFOWorkspaceError(
+                "isolated UFO worktree contains unexpected untracked files"
+            )
 
     def create(
         self,
@@ -190,6 +248,8 @@ class UFOWorkspaceManager:
             )
 
         try:
+            self._require_clean_pinned_worktree(target, commit)
+
             config_dir = target / "config" / "ufo"
             if not config_dir.is_dir():
                 raise UFOWorkspaceError(
@@ -222,6 +282,8 @@ class UFOWorkspaceManager:
                 ),
                 encoding="utf-8",
             )
+
+            self._require_only_expected_overlay_changes(target)
 
             return UFOWorkspace(
                 source_checkout=str(self.source_checkout),
