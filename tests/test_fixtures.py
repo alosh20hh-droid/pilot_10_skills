@@ -286,6 +286,41 @@ class FixtureRepositoryTests(unittest.TestCase):
                 ),
             )
 
+
+    def test_build_number_mismatch_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        evidence["application"]["build_number"] = 2
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=synthetic_builder_result(fixture_id, path),
+            )
+
+    def test_build_name_mismatch_is_rejected(self):
+        fixture_id = "FX-004-POSITION-READY"
+        path = self.repository.canonical_path(fixture_id)
+        path.write_bytes(b"FAKE")
+        evidence = synthetic_evidence(self.contract, fixture_id, path)
+        evidence["application"]["build_name"] = "other-build"
+        with self.assertRaises(FixtureCertificationError):
+            self.repository.certify(
+                fixture_id,
+                aep_path=path,
+                evidence=evidence,
+                expected_run_id="cert-run",
+                expected_request_id="cert-request",
+                min_captured_at=10,
+                builder_result=synthetic_builder_result(fixture_id, path),
+            )
+
     def test_wrong_reader_language_is_rejected(self):
         fixture_id = "FX-004-POSITION-READY"
         path = self.repository.canonical_path(fixture_id)
