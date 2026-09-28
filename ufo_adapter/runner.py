@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -386,14 +387,19 @@ class UFOMeasuredRunner:
         fixture_path: str | Path,
         fixture_sha256: str,
         arm_measured_execution: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float = 900.0,
     ) -> UFOExecutionResult:
         if not arm_measured_execution:
             raise UFOExecutionError(
                 "measured UFO execution refused: arm_measured_execution must be true"
             )
-        if timeout is not None and timeout <= 0:
-            raise UFOExecutionError("timeout must be positive")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(float(timeout))
+            or float(timeout) <= 0
+        ):
+            raise UFOExecutionError("timeout must be a finite positive number")
 
         checkout = self.validate_environment()
         prepared = self.prepare_run(
