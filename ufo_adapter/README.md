@@ -135,7 +135,9 @@ INPUT_TEXT_API: "type_keys"
 CLICK_API: "click_input"
 \`\`\`
 
-This keeps the measured path on the visible Windows UI and removes UFO's API/MCP/evaluation/experience routes from the pilot execution.
+This keeps the measured path on the visible Windows UI and removes non-UI API, command-line, COM, hardware, and external MCP routes from pilot execution.
+
+UFO's local UI collection/action tools are internally transported through its MCP plumbing, so the temporary worktree also rewrites `config/ufo/mcp.yaml` to allow only `UICollector`, `HostUIExecutor`, and `AppUIExecutor`.
 
 The deterministic verifier remains the only success oracle.
 
