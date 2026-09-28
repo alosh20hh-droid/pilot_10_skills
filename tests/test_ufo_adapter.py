@@ -13,6 +13,8 @@ from ufo_adapter import (
     compile_all_plans,
     compile_skill_plan,
     load_upstream_lock,
+    inspect_checkout,
+    require_locked_checkout,
 )
 from verifier.contract import PilotContract
 
@@ -138,6 +140,45 @@ class UFOLockTests(unittest.TestCase):
             "CommandLineExecutor",
             lock["execution_route_policy"]["forbidden_namespaces"],
         )
+
+
+    def test_existing_checkout_may_be_on_another_head_or_dirty_when_pinned_commit_exists(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "ufo"
+            root.mkdir()
+            pinned = make_fake_git_ufo(root)
+
+            required_files = {}
+            for relative in ("config/ufo/system.yaml", "ufo/__main__.py"):
+                blob = subprocess.run(
+                    ["git", "-C", str(root), "rev-parse", f"{pinned}:{relative}"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                required_files[relative] = blob
+
+            (root / "source-only.txt").write_text("new head\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-m", "source head moved"],
+                check=True,
+                capture_output=True,
+            )
+            (root / "dirty-local.txt").write_text("local work\n", encoding="utf-8")
+
+            custom_lock = {
+                "commit": pinned,
+                "required_files": required_files,
+            }
+            inspection = inspect_checkout(root, lock=custom_lock)
+            self.assertTrue(inspection["valid"])
+            self.assertTrue(inspection["pinned_commit_available"])
+            self.assertNotEqual(inspection["source_head"], pinned)
+            self.assertFalse(inspection["source_clean_worktree"])
+
+            required = require_locked_checkout(root, lock=custom_lock)
+            self.assertEqual(required["expected_commit"], pinned)
 
     def test_audited_controller_capabilities_are_declared(self):
         lock = load_upstream_lock()
