@@ -8,6 +8,7 @@ run exists.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -103,6 +104,20 @@ class FixtureBuilder:
                 "fixture build refused: acknowledge_disposable_project must be true "
                 "because the fixture builder closes the current AE project without saving"
             )
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(float(timeout))
+            or float(timeout) <= 0
+        ):
+            raise FixtureBuildError("fixture build timeout must be a finite positive number")
+        if (
+            isinstance(poll_interval, bool)
+            or not isinstance(poll_interval, (int, float))
+            or not math.isfinite(float(poll_interval))
+            or float(poll_interval) <= 0
+        ):
+            raise FixtureBuildError("fixture build poll_interval must be a finite positive number")
 
         output = Path(output_path).expanduser()
         if output.suffix.lower() != ".aep":
@@ -133,7 +148,7 @@ class FixtureBuilder:
             except (OSError, ValueError) as exc:
                 raise FixtureBuildError(f"After Effects launch failed: {exc}") from exc
 
-            deadline = time.monotonic() + max(0.0, float(timeout))
+            deadline = time.monotonic() + float(timeout)
             while time.monotonic() <= deadline:
                 if result_path.is_file():
                     try:
@@ -171,7 +186,7 @@ class FixtureBuilder:
                     result["output_path"] = str(output.resolve())
                     return result
 
-                time.sleep(max(0.02, float(poll_interval)))
+                time.sleep(float(poll_interval))
 
             raise FixtureBuildError(
                 f"fixture build timed out after {timeout:.1f}s: {fixture_id}"
