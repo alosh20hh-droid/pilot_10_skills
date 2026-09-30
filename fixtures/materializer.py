@@ -49,14 +49,14 @@ class FixtureMaterializer:
                 "Delete it explicitly only when intentionally rebuilding."
             )
 
-        build_result = self.builder.build(
-            fixture_id,
-            output,
-            timeout=timeout,
-            acknowledge_disposable_project=acknowledge_disposable_project,
-        )
-
         try:
+            build_result = self.builder.build(
+                fixture_id,
+                output,
+                timeout=timeout,
+                acknowledge_disposable_project=acknowledge_disposable_project,
+            )
+
             certification_run_id = (
                 f"fixture-cert-{fixture_id}-{int(time.time() * 1000)}"
             )
