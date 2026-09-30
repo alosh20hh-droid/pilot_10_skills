@@ -163,10 +163,28 @@ class AEPropertySnapshot:
         if not isinstance(keys_raw, list):
             raise ValueError("invalid property keys")
         keys = [AEPropertyKey.from_dict(item) for item in keys_raw]
-        if value["available"] and len(keys) != num_keys:
-            raise ValueError("property key count does not match keys")
         name = value.get("name")
         match_name = value.get("match_name")
+        current_value = _primitive(value.get("current_value"))
+
+        if value["available"]:
+            if len(keys) != num_keys:
+                raise ValueError("property key count does not match keys")
+            if not isinstance(name, str) or not name:
+                raise ValueError("available property is missing a name")
+            if not isinstance(match_name, str) or not match_name:
+                raise ValueError("available property is missing a match name")
+        else:
+            if (
+                name is not None
+                or match_name is not None
+                or num_keys != 0
+                or varying is not False
+                or current_value is not None
+                or keys
+            ):
+                raise ValueError("unavailable property contains observable state")
+
         if name is not None and not isinstance(name, str):
             raise ValueError("invalid property name")
         if match_name is not None and not isinstance(match_name, str):
@@ -177,7 +195,7 @@ class AEPropertySnapshot:
             match_name=match_name,
             num_keys=num_keys,
             is_time_varying=varying,
-            current_value=_primitive(value.get("current_value")),
+            current_value=current_value,
             keys=keys,
         )
 
@@ -208,13 +226,46 @@ class AEPositionSnapshot:
         if not isinstance(value, dict) or value.get("mode") not in {"combined", "separated", "unavailable"}:
             raise ValueError("invalid position snapshot")
         prop = value.get("property")
-        separated_raw = value.get("separated") or {}
+        separated_raw = value.get("separated")
         if not isinstance(separated_raw, dict):
             raise ValueError("invalid separated position")
+
+        mode = value["mode"]
+        parsed_property = (
+            AEPropertySnapshot.from_dict(prop)
+            if isinstance(prop, dict)
+            else None
+        )
+        parsed_separated = {
+            str(key): AEPropertySnapshot.from_dict(item)
+            for key, item in separated_raw.items()
+        }
+
+        if mode == "combined":
+            if parsed_property is None or not parsed_property.available:
+                raise ValueError("combined position requires an available property")
+            if parsed_separated:
+                raise ValueError("combined position cannot contain separated properties")
+        elif mode == "separated":
+            if parsed_property is not None:
+                raise ValueError("separated position cannot contain a combined property")
+            if not parsed_separated:
+                raise ValueError("separated position requires separated properties")
+            allowed = {"ADBE Position_0", "ADBE Position_1", "ADBE Position_2"}
+            if not set(parsed_separated).issubset(allowed):
+                raise ValueError("separated position contains unknown axes")
+            for axis in ("ADBE Position_0", "ADBE Position_1"):
+                axis_property = parsed_separated.get(axis)
+                if axis_property is None or not axis_property.available:
+                    raise ValueError("separated position requires available X and Y properties")
+        else:
+            if parsed_property is not None or parsed_separated:
+                raise ValueError("unavailable position contains observable state")
+
         return cls(
-            mode=value["mode"],
-            property=AEPropertySnapshot.from_dict(prop) if isinstance(prop, dict) else None,
-            separated={str(key): AEPropertySnapshot.from_dict(item) for key, item in separated_raw.items()},
+            mode=mode,
+            property=parsed_property,
+            separated=parsed_separated,
         )
 
     @classmethod
