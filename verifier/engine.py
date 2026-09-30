@@ -929,6 +929,17 @@ class DeterministicVerifier:
                 "REQUEST_ID_REQUIRED",
                 "a non-empty post-state request_id is required for verification",
             )
+        pre_request_id = preflight.details.get("pre_request_id")
+        if expected_request_id == pre_request_id:
+            return RunDecision(
+                "INCONCLUSIVE",
+                "POST_REQUEST_ID_REUSED",
+                "post-state must use a new AE Reader request_id distinct from preflight",
+                details={
+                    "pre_request_id": pre_request_id,
+                    "post_request_id": expected_request_id,
+                },
+            )
         if not _is_number(last_action_at):
             return RunDecision(
                 "INCONCLUSIVE",
