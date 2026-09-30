@@ -193,6 +193,44 @@ class SchemaTests(unittest.TestCase):
 
 
 
+    def test_unavailable_property_cannot_carry_observable_value(self):
+        data = sample_response()
+        opacity = data["layers"][0]["opacity"]
+        opacity.update({
+            "available": False,
+            "name": None,
+            "match_name": None,
+            "num_keys": 0,
+            "is_time_varying": False,
+            "current_value": 40,
+            "keys": [],
+        })
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_combined_position_requires_available_property(self):
+        data = sample_response()
+        position = data["layers"][0]["position"]
+        position["property"].update({
+            "available": False,
+            "name": None,
+            "match_name": None,
+            "num_keys": 0,
+            "is_time_varying": False,
+            "current_value": None,
+            "keys": [],
+        })
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+    def test_unavailable_position_cannot_hide_combined_state(self):
+        data = sample_response()
+        position = data["layers"][0]["position"]
+        position["mode"] = "unavailable"
+        with self.assertRaises(ValueError):
+            AEStateSnapshot.from_dict(data)
+
+
     def test_non_finite_capture_timestamp_is_rejected(self):
         data = sample_response(captured_at=float("nan"))
         with self.assertRaises(ValueError):
