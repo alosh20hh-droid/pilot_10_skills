@@ -176,6 +176,25 @@ class FixtureBuilderPythonTests(unittest.TestCase):
                 acknowledge_disposable_project=False,
             )
 
+    def test_builder_rejects_invalid_timing_parameters_before_launch(self):
+        builder = FixtureBuilder(load_contract())
+        for timeout in (0, -1, float("nan"), float("inf")):
+            with self.assertRaises(FixtureBuildError):
+                builder.build(
+                    "FX-001-EMPTY-PROJECT",
+                    "fixture.aep",
+                    timeout=timeout,
+                    acknowledge_disposable_project=True,
+                )
+        for poll_interval in (0, -1, float("nan"), float("inf")):
+            with self.assertRaises(FixtureBuildError):
+                builder.build(
+                    "FX-001-EMPTY-PROJECT",
+                    "fixture.aep",
+                    poll_interval=poll_interval,
+                    acknowledge_disposable_project=True,
+                )
+
     def test_builder_rejects_non_aep_output_before_launching_after_effects(self):
         builder = FixtureBuilder(load_contract())
         with self.assertRaises(FixtureBuildError):
