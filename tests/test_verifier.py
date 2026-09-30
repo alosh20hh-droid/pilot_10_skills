@@ -860,11 +860,11 @@ class PostVerificationTests(unittest.TestCase):
             execution_completed=True,
             evidence=evidence_for(
                 state,
-                request_id="request-1",
+                request_id="pre-1",
                 captured_at=40,
             ),
             expected_run_id="run-1",
-            expected_request_id="request-1",
+            expected_request_id="pre-1",
             last_action_at=30,
         )
         self.assertEqual(decision.run_status, "INCONCLUSIVE")
