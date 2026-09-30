@@ -851,6 +851,25 @@ class PostVerificationTests(unittest.TestCase):
         self.assertEqual(decision.run_status, "INCONCLUSIVE")
         self.assertEqual(decision.reason_code, "REQUEST_ID_REQUIRED")
 
+    def test_reused_preflight_request_id_is_inconclusive(self):
+        state = fixture_state("AE-PILOT-004")
+        state["layers"][0]["transform"]["position"] = {"x": 960, "y": 540}
+        decision = self.verifier.verify_post(
+            skill_id="AE-PILOT-004",
+            preflight=self.preflight,
+            execution_completed=True,
+            evidence=evidence_for(
+                state,
+                request_id="request-1",
+                captured_at=40,
+            ),
+            expected_run_id="run-1",
+            expected_request_id="request-1",
+            last_action_at=30,
+        )
+        self.assertEqual(decision.run_status, "INCONCLUSIVE")
+        self.assertEqual(decision.reason_code, "POST_REQUEST_ID_REUSED")
+
     def test_reader_not_ok_after_execution_is_inconclusive(self):
         state = fixture_state("AE-PILOT-004")
         decision = self.verifier.verify_post(
