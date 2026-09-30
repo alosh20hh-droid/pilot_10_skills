@@ -619,6 +619,44 @@ class FixtureMaterializerTests(unittest.TestCase):
             repository.verify_canonical("FX-002-COMP-EMPTY")
 
 
+    def test_materializer_cleans_untrusted_output_when_builder_raises(self):
+        class FailingBuilder(_FakeBuilder):
+            def build(self, fixture_id, output_path, *, timeout, acknowledge_disposable_project):
+                super().build(
+                    fixture_id,
+                    output_path,
+                    timeout=timeout,
+                    acknowledge_disposable_project=acknowledge_disposable_project,
+                )
+                raise FixtureBuildError("simulated builder failure after output creation")
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            shutil.copy2(CONTRACT_PATH, root / "pilot_10_skills.yaml")
+            contract = load_contract(root / "pilot_10_skills.yaml")
+            repository = FixtureRepository(contract, repo_root=root)
+            materializer = FixtureMaterializer(
+                contract,
+                repository=repository,
+                builder=FailingBuilder(),
+                reader=_FakeReader(
+                    contract,
+                    "FX-002-COMP-EMPTY",
+                    lambda: repository.canonical_path("FX-002-COMP-EMPTY"),
+                ),
+            )
+            with self.assertRaises(FixtureBuildError):
+                materializer.materialize_one(
+                    "FX-002-COMP-EMPTY",
+                    acknowledge_disposable_project=True,
+                )
+            self.assertFalse(
+                repository.canonical_path("FX-002-COMP-EMPTY").exists()
+            )
+            self.assertFalse(
+                repository.certification_path("FX-002-COMP-EMPTY").exists()
+            )
+
     def test_materializer_rejects_reader_evidence_older_than_save_boundary(self):
         class LateSaveBuilder(_FakeBuilder):
             def build(self, fixture_id, output_path, *, timeout, acknowledge_disposable_project):
